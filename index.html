@@ -3,264 +3,244 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ayoubi Dental Clinic</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-body{font-family:Arial;background:#f1f5f9;margin:0;color:#1e293b}
-header{background:#075985;color:white;text-align:center;padding:24px}
-main{max-width:900px;margin:25px auto;padding:12px}
-.card{background:white;padding:20px;margin-bottom:20px;border-radius:12px;box-shadow:0 2px 8px #0001}
-input,select,textarea{width:100%;padding:12px;margin:8px 0 15px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:7px}
-button{background:#0284c7;color:white;border:0;padding:12px 18px;border-radius:7px;cursor:pointer}
-.delete{background:#dc2626}
+body{font-family:Arial,sans-serif;background:#f1f5f9;margin:0;padding:15px;color:#172554}
+.container{max-width:950px;margin:auto}
+header{background:#087e8b;color:white;padding:20px;text-align:center;border-radius:12px;margin-bottom:15px}
+.card{background:white;padding:18px;border-radius:12px;margin-bottom:15px;box-shadow:0 2px 8px #ddd}
+input,select,textarea{width:100%;padding:11px;margin:7px 0 13px;box-sizing:border-box;border:1px solid #ccc;border-radius:7px}
+button{padding:10px 14px;border:0;border-radius:7px;background:#087e8b;color:white;margin:3px;cursor:pointer}
+button.danger{background:#c62828}
+button.secondary{background:#64748b}
+table{width:100%;border-collapse:collapse;min-width:650px}
+th,td{border:1px solid #ddd;padding:9px;text-align:left}
+th{background:#e0f2f1}
+.table-wrap{overflow-x:auto}
 .hidden{display:none}
-table{width:100%;border-collapse:collapse;min-width:600px}
-td,th{padding:10px;border-bottom:1px solid #ddd;text-align:left}
-.tablewrap{overflow-x:auto}
-#message{padding:10px;color:#075985}
+#message{font-weight:bold;margin:10px 0}
 </style>
 </head>
 <body>
-
+<div class="container">
 <header>
-<h1>🦷 Ayoubi Dental Clinic</h1>
+<h1>Ayoubi Dental Clinic</h1>
 <p>Patient Management System</p>
 </header>
 
-<main>
-
-<div id="login" class="card">
-<h2>Clinic Login</h2>
+<div class="card" id="loginBox">
+<h2>Login</h2>
 <label>Email</label>
-<input id="email" type="email" placeholder="Your clinic email">
+<input id="email" type="email" placeholder="Enter email">
 <label>Password</label>
-<input id="password" type="password" placeholder="Your password">
-<button id="loginBtn">Login</button>
+<input id="password" type="password" placeholder="Enter password">
+<button onclick="login()">Login</button>
 </div>
 
 <div id="app" class="hidden">
-
 <div class="card">
-<h2>Welcome to Ayoubi Dental Clinic</h2>
-<button id="logoutBtn">Logout</button>
-<p>Total Patients: <strong id="total">0</strong></p>
+<h2>Dashboard</h2>
+<button onclick="logout()">Logout</button>
+<p id="message"></p>
 </div>
 
 <div class="card">
-<h2>Register New Patient</h2>
-<form id="patientForm">
-<label>Full Name</label>
-<input id="name" required>
-
-<label>Phone</label>
-<input id="phone" type="tel">
-
-<label>Age</label>
-<input id="age" type="number" min="0">
-
-<label>Gender</label>
+<h2 id="formTitle">Register New Patient</h2>
+<input id="full_name" placeholder="Patient Full Name">
+<input id="phone" placeholder="Phone Number">
+<input id="age" type="number" placeholder="Age">
 <select id="gender">
 <option value="">Select Gender</option>
 <option>Male</option>
 <option>Female</option>
 </select>
-
-<label>Chief Complaint</label>
-<textarea id="complaint"></textarea>
-
-<label>Medical History</label>
-<textarea id="history"></textarea>
-
-<label>Address</label>
-<input id="address">
-
-<button type="submit">Save Patient</button>
-</form>
+<textarea id="chief_complaint" placeholder="Chief Complaint"></textarea>
+<textarea id="medical_history" placeholder="Medical History"></textarea>
+<textarea id="address" placeholder="Address"></textarea>
+<button onclick="savePatient()" id="saveButton">Save Patient</button>
+<button onclick="cancelEdit()" id="cancelButton" class="secondary hidden">Cancel Edit</button>
 </div>
 
 <div class="card">
 <h2>Patient Records</h2>
-<input id="search" placeholder="Search by name or phone">
-<div class="tablewrap">
+<input id="search" placeholder="Search by name or phone" oninput="renderPatients()">
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
-<th>Name</th>
-<th>Phone</th>
-<th>Age</th>
-<th>Gender</th>
-<th>Complaint</th>
-<th>Action</th>
+<th>Name</th><th>Phone</th><th>Age</th><th>Actions</th>
 </tr>
 </thead>
-<tbody id="patientList"></tbody>
+<tbody id="patientRows"></tbody>
 </table>
 </div>
 </div>
 </div>
-
-<p id="message"></p>
-</main>
+</div>
 
 <script>
 const SUPABASE_URL = "https://qrmgjgzgvbisuhqimqmd.supabase.co";
 const SUPABASE_KEY = "sb_publishable_-VKLHhcBBx6DuKNokUkMLQ_wWWBchyh";
+const db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-const db = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);
+let patients = [];
+let editingId = null;
 
-const message = document.getElementById("message");
+function msg(text){
+ document.getElementById("message").textContent=text;
+}
 
-function showMessage(text){
-  message.textContent = text;
+async function login(){
+ const email=document.getElementById("email").value.trim();
+ const password=document.getElementById("password").value;
+ const {error}=await db.auth.signInWithPassword({email,password});
+ if(error){alert(error.message);return;}
+ document.getElementById("loginBox").classList.add("hidden");
+ document.getElementById("app").classList.remove("hidden");
+ await loadPatients();
+ msg("Login successful");
+}
+
+async function logout(){
+ await db.auth.signOut();
+ document.getElementById("app").classList.add("hidden");
+ document.getElementById("loginBox").classList.remove("hidden");
+ patients=[];
+ cancelEdit();
 }
 
 async function loadPatients(){
-  const {data,error} = await db
-    .from("Patients")
-    .select("*")
-    .order("created_at",{ascending:false});
-
-  if(error){
-    showMessage("Could not load patients: " + error.message);
-    return;
-  }
-
-  displayPatients(data || []);
+ const {data,error}=await db.from("Patients").select("*").order("id",{ascending:false});
+ if(error){msg("Load failed: "+error.message);return;}
+ patients=data||[];
+ renderPatients();
 }
 
-function displayPatients(patients){
-  const list = document.getElementById("patientList");
-  const search = document.getElementById("search").value.toLowerCase();
+function renderPatients(){
+ const search=document.getElementById("search").value.toLowerCase();
+ const body=document.getElementById("patientRows");
+ body.replaceChildren();
 
-  list.replaceChildren();
+ patients.filter(p=>
+  String(p.full_name||"").toLowerCase().includes(search) ||
+  String(p.phone||"").toLowerCase().includes(search)
+ ).forEach(p=>{
+  const tr=document.createElement("tr");
+  const name=document.createElement("td");
+  name.textContent=p.full_name||"";
+  const phone=document.createElement("td");
+  phone.textContent=p.phone||"";
+  const age=document.createElement("td");
+  age.textContent=p.age??"";
+  const actions=document.createElement("td");
 
-  const filtered = patients.filter(p =>
-    (p.full_name || "").toLowerCase().includes(search) ||
-    (p.phone || "").toLowerCase().includes(search)
-  );
+  const details=document.createElement("button");
+  details.textContent="Details";
+  details.onclick=()=>showDetails(p);
 
-  document.getElementById("total").textContent = patients.length;
+  const edit=document.createElement("button");
+  edit.textContent="Edit";
+  edit.onclick=()=>editPatient(p);
 
-  filtered.forEach(p => {
-    const tr = document.createElement("tr");
+  const del=document.createElement("button");
+  del.textContent="Delete";
+  del.className="danger";
+  del.onclick=()=>deletePatient(p.id);
 
-    [p.full_name,p.phone,p.age,p.gender,p.chief_complaint].forEach(value => {
-      const td = document.createElement("td");
-      td.textContent = value ?? "";
-      tr.appendChild(td);
-    });
+  actions.append(details,edit,del);
+  tr.append(name,phone,age,actions);
+  body.appendChild(tr);
+ });
+}
 
-    const td = document.createElement("td");
-    const button = document.createElement("button");
-    button.textContent = "Delete";
-    button.className = "delete";
+function showDetails(p){
+ alert(
+  "Patient Details\n"+
+  "Name: "+(p.full_name||"")+"\n"+
+  "Phone: "+(p.phone||"")+"\n"+
+  "Age: "+(p.age??"")+"\n"+
+  "Gender: "+(p.gender||"")+"\n"+
+  "Chief Complaint: "+(p.chief_complaint||"")+"\n"+
+  "Medical History: "+(p.medical_history||"")+"\n"+
+  "Address: "+(p.address||"")
+ );
+}
 
-    button.onclick = async () => {
-      if(!confirm("Delete this patient?")) return;
+function editPatient(p){
+ editingId=p.id;
+ document.getElementById("full_name").value=p.full_name||"";
+ document.getElementById("phone").value=p.phone||"";
+ document.getElementById("age").value=p.age??"";
+ document.getElementById("gender").value=p.gender||"";
+ document.getElementById("chief_complaint").value=p.chief_complaint||"";
+ document.getElementById("medical_history").value=p.medical_history||"";
+ document.getElementById("address").value=p.address||"";
+ document.getElementById("formTitle").textContent="Edit Patient";
+ document.getElementById("saveButton").textContent="Update Patient";
+ document.getElementById("cancelButton").classList.remove("hidden");
+ window.scrollTo({top:0,behavior:"smooth"});
+}
 
-      const {error} = await db
-        .from("Patients")
-        .delete()
-        .eq("id",p.id);
+function cancelEdit(){
+ editingId=null;
+ ["full_name","phone","age","gender","chief_complaint","medical_history","address"].forEach(id=>{
+  document.getElementById(id).value="";
+ });
+ document.getElementById("formTitle").textContent="Register New Patient";
+ document.getElementById("saveButton").textContent="Save Patient";
+ document.getElementById("cancelButton").classList.add("hidden");
+}
 
-      if(error){
-        showMessage(error.message);
-      } else {
-        showMessage("Patient deleted.");
-        loadPatients();
-      }
-    };
+async function savePatient(){
+ const full_name=document.getElementById("full_name").value.trim();
+ if(!full_name){alert("Please enter patient name");return;}
 
-    td.appendChild(button);
-    tr.appendChild(td);
-    list.appendChild(tr);
-  });
+ const patient={
+  full_name,
+  phone:document.getElementById("phone").value.trim(),
+  age:document.getElementById("age").value?Number(document.getElementById("age").value):null,
+  gender:document.getElementById("gender").value,
+  chief_complaint:document.getElementById("chief_complaint").value.trim(),
+  medical_history:document.getElementById("medical_history").value.trim(),
+  address:document.getElementById("address").value.trim()
+ };
+
+ let result;
+ if(editingId!==null){
+  result=await db.from("Patients").update(patient).eq("id",editingId);
+ }else{
+  result=await db.from("Patients").insert([patient]);
+ }
+
+ if(result.error){
+  msg("Save failed: "+result.error.message);
+  return;
+ }
+
+ msg(editingId!==null?"Patient updated successfully":"Patient saved successfully");
+ cancelEdit();
+ await loadPatients();
+}
+
+async function deletePatient(id){
+ if(!confirm("Are you sure you want to delete this patient?"))return;
+ const {error}=await db.from("Patients").delete().eq("id",id);
+ if(error){msg("Delete failed: "+error.message);return;}
+ msg("Patient deleted successfully");
+ if(editingId===id)cancelEdit();
+ await loadPatients();
 }
 
 async function checkLogin(){
-  const {data,error} = await db.auth.getSession();
-
-  if(error){
-    showMessage(error.message);
-    return;
-  }
-
-  const loggedIn = !!data.session;
-
-  document.getElementById("login").classList.toggle("hidden",loggedIn);
-  document.getElementById("app").classList.toggle("hidden",!loggedIn);
-
-  if(loggedIn) loadPatients();
+ const {data:{session}}=await db.auth.getSession();
+ if(session){
+  document.getElementById("loginBox").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  await loadPatients();
+ }
 }
-
-document.getElementById("loginBtn").onclick = async () => {
-  const email = document.getElementById("email").value.trim();
-  const password = document.getElementById("password").value;
-
-  if(!email || !password){
-    showMessage("Enter email and password.");
-    return;
-  }
-
-  const {error} = await db.auth.signInWithPassword({
-    email,
-    password
-  });
-
-  if(error){
-    showMessage("Login failed: " + error.message);
-  } else {
-    showMessage("Login successful.");
-    checkLogin();
-  }
-};
-
-document.getElementById("logoutBtn").onclick = async () => {
-  await db.auth.signOut();
-  showMessage("Logged out.");
-  checkLogin();
-};
-
-document.getElementById("patientForm").onsubmit = async (e) => {
-  e.preventDefault();
-
-  const patient = {
-    full_name: document.getElementById("name").value.trim(),
-    phone: document.getElementById("phone").value.trim(),
-    age: document.getElementById("age").value
-      ? Number(document.getElementById("age").value)
-      : null,
-    gender: document.getElementById("gender").value,
-    chief_complaint: document.getElementById("complaint").value.trim(),
-    medical_history: document.getElementById("history").value.trim(),
-    address: document.getElementById("address").value.trim()
-  };
-
-  const {error} = await db
-    .from("Patients")
-    .insert([patient]);
-
-  if(error){
-    showMessage("Save failed: " + error.message);
-  } else {
-    showMessage("Patient saved successfully.");
-    e.target.reset();
-    loadPatients();
-  }
-};
-
-document.getElementById("search").addEventListener("input",loadPatients);
-
-db.auth.onAuthStateChange((event,session) => {
-  if(event === "SIGNED_OUT"){
-    document.getElementById("login").classList.remove("hidden");
-    document.getElementById("app").classList.add("hidden");
-  }
-});
 
 checkLogin();
 </script>
