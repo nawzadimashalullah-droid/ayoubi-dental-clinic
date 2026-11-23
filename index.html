@@ -1,26 +1,26 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ps">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ayoubi Dental Clinic</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-body{font-family:Arial,sans-serif;background:#f1f5f9;margin:0;padding:15px;color:#172554}
-.container{max-width:950px;margin:auto}
-header{background:#087e8b;color:white;padding:20px;text-align:center;border-radius:12px;margin-bottom:15px}
-.card{background:white;padding:18px;border-radius:12px;margin-bottom:15px;box-shadow:0 2px 8px #ddd}
-input,select,textarea{width:100%;padding:11px;margin:7px 0 13px;box-sizing:border-box;border:1px solid #ccc;border-radius:7px}
-button{padding:10px 14px;border:0;border-radius:7px;background:#087e8b;color:white;margin:3px;cursor:pointer}
-button.danger{background:#c62828}
-button.secondary{background:#64748b}
+body{font-family:Arial,sans-serif;background:#f1f5f9;margin:0;padding:14px;color:#172554}
+.container{max-width:1000px;margin:auto}
+header{background:#087e8b;color:white;padding:20px;text-align:center;border-radius:12px}
+.card{background:white;padding:16px;border-radius:12px;margin:14px 0;box-shadow:0 2px 8px #ddd}
+input,select,textarea{width:100%;box-sizing:border-box;padding:11px;margin:6px 0 12px;border:1px solid #ccc;border-radius:7px}
+button{padding:10px 14px;background:#087e8b;color:white;border:0;border-radius:7px;margin:3px;cursor:pointer}
+.danger{background:#c62828}.secondary{background:#64748b}
 table{width:100%;border-collapse:collapse;min-width:650px}
-th,td{border:1px solid #ddd;padding:9px;text-align:left}
+td,th{border:1px solid #ddd;padding:8px;text-align:left}
 th{background:#e0f2f1}
 .table-wrap{overflow-x:auto}
 .hidden{display:none}
-#message{font-weight:bold;margin:10px 0}
+#message{font-weight:bold}
+img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 </style>
 </head>
 <body>
@@ -33,9 +33,9 @@ th{background:#e0f2f1}
 <div class="card" id="loginBox">
 <h2>Login</h2>
 <label>Email</label>
-<input id="email" type="email" placeholder="Enter email">
+<input id="email" type="email" placeholder="Email">
 <label>Password</label>
-<input id="password" type="password" placeholder="Enter password">
+<input id="password" type="password" placeholder="Password">
 <button onclick="login()">Login</button>
 </div>
 
@@ -48,55 +48,110 @@ th{background:#e0f2f1}
 
 <div class="card">
 <h2 id="formTitle">Register New Patient</h2>
-<input id="full_name" placeholder="Patient Full Name">
+
+<label>Patient Full Name</label>
+<input id="full_name" placeholder="Full Name">
+
+<label>Phone Number</label>
 <input id="phone" placeholder="Phone Number">
+
+<label>Age</label>
 <input id="age" type="number" placeholder="Age">
+
+<label>Gender</label>
 <select id="gender">
 <option value="">Select Gender</option>
 <option>Male</option>
 <option>Female</option>
 </select>
-<textarea id="chief_complaint" placeholder="Chief Complaint"></textarea>
-<textarea id="medical_history" placeholder="Medical History"></textarea>
-<textarea id="address" placeholder="Address"></textarea>
+
+<label>Registration Date</label>
+<input id="registration_date" type="date">
+
+<label>Chief Complaint</label>
+<textarea id="chief_complaint"></textarea>
+
+<label>Diagnosis</label>
+<textarea id="diagnosis" placeholder="Diagnosis"></textarea>
+
+<label>Tooth Number</label>
+<input id="tooth_number" placeholder="Example: 11, 16, 36">
+
+<label>Treatment Performed</label>
+<textarea id="treatment" placeholder="Treatment"></textarea>
+
+<label>Prescription and Medication</label>
+<textarea id="prescription" placeholder="Medicine and dosage"></textarea>
+
+<label>Next Appointment Date</label>
+<input id="next_appointment" type="date">
+
+<label>Medical History</label>
+<textarea id="medical_history"></textarea>
+
+<label>Address</label>
+<textarea id="address"></textarea>
+
+<label>Dental Photos and X-rays</label>
+<input id="dentalFiles" type="file" accept="image/*" multiple>
+<p>Choose dental photos or X-ray images.</p>
+
 <button onclick="savePatient()" id="saveButton">Save Patient</button>
 <button onclick="cancelEdit()" id="cancelButton" class="secondary hidden">Cancel Edit</button>
 </div>
 
 <div class="card">
 <h2>Patient Records</h2>
-<input id="search" placeholder="Search by name or phone" oninput="renderPatients()">
+<input id="search" placeholder="Search name or phone" oninput="renderPatients()">
 <div class="table-wrap">
 <table>
 <thead>
-<tr>
-<th>Name</th><th>Phone</th><th>Age</th><th>Actions</th>
-</tr>
+<tr><th>Name</th><th>Phone</th><th>Age</th><th>Actions</th></tr>
 </thead>
 <tbody id="patientRows"></tbody>
 </table>
 </div>
 </div>
+
+<div class="card hidden" id="detailsBox">
+<h2>Patient Details</h2>
+<div id="detailsContent"></div>
+<h3>Dental Photos and X-rays</h3>
+<div id="imageContent"></div>
+<button onclick="document.getElementById('detailsBox').classList.add('hidden')">Close</button>
+</div>
 </div>
 </div>
 
 <script>
-const SUPABASE_URL = "https://qrmgjgzgvbisuhqimqmd.supabase.co";
-const SUPABASE_KEY = "sb_publishable_-VKLHhcBBx6DuKNokUkMLQ_wWWBchyh";
-const db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const SUPABASE_URL="https://qrmgjgzgvbisuhqimqmd.supabase.co";
+const SUPABASE_KEY="sb_publishable_-VKLHhcBBx6DuKNokUkMLQ_wWWBchyh";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-let patients = [];
-let editingId = null;
+let patients=[];
+let editingId=null;
 
-function msg(text){
- document.getElementById("message").textContent=text;
+function msg(t){
+ document.getElementById("message").textContent=t;
+}
+
+function val(id){
+ return document.getElementById(id).value.trim();
+}
+
+function setVal(id,v){
+ document.getElementById(id).value=v??"";
 }
 
 async function login(){
- const email=document.getElementById("email").value.trim();
+ const email=val("email");
  const password=document.getElementById("password").value;
  const {error}=await db.auth.signInWithPassword({email,password});
  if(error){alert(error.message);return;}
+ await showApp();
+}
+
+async function showApp(){
  document.getElementById("loginBox").classList.add("hidden");
  document.getElementById("app").classList.remove("hidden");
  await loadPatients();
@@ -119,26 +174,26 @@ async function loadPatients(){
 }
 
 function renderPatients(){
- const search=document.getElementById("search").value.toLowerCase();
+ const search=val("search").toLowerCase();
  const body=document.getElementById("patientRows");
  body.replaceChildren();
 
  patients.filter(p=>
-  String(p.full_name||"").toLowerCase().includes(search) ||
+  String(p.full_name||"").toLowerCase().includes(search)||
   String(p.phone||"").toLowerCase().includes(search)
  ).forEach(p=>{
   const tr=document.createElement("tr");
-  const name=document.createElement("td");
-  name.textContent=p.full_name||"";
-  const phone=document.createElement("td");
-  phone.textContent=p.phone||"";
-  const age=document.createElement("td");
-  age.textContent=p.age??"";
+  [p.full_name,p.phone,p.age].forEach(v=>{
+   const td=document.createElement("td");
+   td.textContent=v??"";
+   tr.appendChild(td);
+  });
+
   const actions=document.createElement("td");
 
-  const details=document.createElement("button");
-  details.textContent="Details";
-  details.onclick=()=>showDetails(p);
+  const detail=document.createElement("button");
+  detail.textContent="Details";
+  detail.onclick=()=>showDetails(p);
 
   const edit=document.createElement("button");
   edit.textContent="Edit";
@@ -149,34 +204,20 @@ function renderPatients(){
   del.className="danger";
   del.onclick=()=>deletePatient(p.id);
 
-  actions.append(details,edit,del);
-  tr.append(name,phone,age,actions);
+  actions.append(detail,edit,del);
+  tr.appendChild(actions);
   body.appendChild(tr);
  });
 }
 
-function showDetails(p){
- alert(
-  "Patient Details\n"+
-  "Name: "+(p.full_name||"")+"\n"+
-  "Phone: "+(p.phone||"")+"\n"+
-  "Age: "+(p.age??"")+"\n"+
-  "Gender: "+(p.gender||"")+"\n"+
-  "Chief Complaint: "+(p.chief_complaint||"")+"\n"+
-  "Medical History: "+(p.medical_history||"")+"\n"+
-  "Address: "+(p.address||"")
- );
-}
-
 function editPatient(p){
  editingId=p.id;
- document.getElementById("full_name").value=p.full_name||"";
- document.getElementById("phone").value=p.phone||"";
- document.getElementById("age").value=p.age??"";
- document.getElementById("gender").value=p.gender||"";
- document.getElementById("chief_complaint").value=p.chief_complaint||"";
- document.getElementById("medical_history").value=p.medical_history||"";
- document.getElementById("address").value=p.address||"";
+ const fields=[
+ "full_name","phone","age","gender","registration_date",
+ "chief_complaint","diagnosis","tooth_number","treatment",
+ "prescription","next_appointment","medical_history","address"
+ ];
+ fields.forEach(k=>setVal(k,p[k]));
  document.getElementById("formTitle").textContent="Edit Patient";
  document.getElementById("saveButton").textContent="Update Patient";
  document.getElementById("cancelButton").classList.remove("hidden");
@@ -185,43 +226,143 @@ function editPatient(p){
 
 function cancelEdit(){
  editingId=null;
- ["full_name","phone","age","gender","chief_complaint","medical_history","address"].forEach(id=>{
-  document.getElementById(id).value="";
- });
+ [
+ "full_name","phone","age","gender","registration_date",
+ "chief_complaint","diagnosis","tooth_number","treatment",
+ "prescription","next_appointment","medical_history","address","dentalFiles"
+ ].forEach(k=>setVal(k,""));
  document.getElementById("formTitle").textContent="Register New Patient";
  document.getElementById("saveButton").textContent="Save Patient";
  document.getElementById("cancelButton").classList.add("hidden");
 }
 
+async function uploadImages(patientId,oldPaths){
+ const files=Array.from(document.getElementById("dentalFiles").files||[]);
+ if(!files.length)return oldPaths||[];
+
+ const {data:{user},error:userError}=await db.auth.getUser();
+ if(userError||!user)throw new Error("Please login again.");
+
+ const paths=[...(oldPaths||[])];
+
+ for(const file of files){
+  if(!file.type.startsWith("image/"))continue;
+  if(file.size>10*1024*1024)throw new Error("Each image must be smaller than 10 MB.");
+
+  const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+  const path=user.id+"/"+patientId+"/"+Date.now()+"-"+safeName;
+
+  const {error}=await db.storage.from("patient-images").upload(path,file);
+  if(error)throw error;
+  paths.push(path);
+ }
+ return paths;
+}
+
 async function savePatient(){
- const full_name=document.getElementById("full_name").value.trim();
- if(!full_name){alert("Please enter patient name");return;}
+ const full_name=val("full_name");
+ if(!full_name){alert("Please enter patient name.");return;}
 
  const patient={
   full_name,
-  phone:document.getElementById("phone").value.trim(),
-  age:document.getElementById("age").value?Number(document.getElementById("age").value):null,
-  gender:document.getElementById("gender").value,
-  chief_complaint:document.getElementById("chief_complaint").value.trim(),
-  medical_history:document.getElementById("medical_history").value.trim(),
-  address:document.getElementById("address").value.trim()
+  phone:val("phone"),
+  age:val("age")?Number(val("age")):null,
+  gender:val("gender"),
+  registration_date:val("registration_date")||new Date().toISOString().slice(0,10),
+  chief_complaint:val("chief_complaint"),
+  diagnosis:val("diagnosis"),
+  tooth_number:val("tooth_number"),
+  treatment:val("treatment"),
+  prescription:val("prescription"),
+  next_appointment:val("next_appointment")||null,
+  medical_history:val("medical_history"),
+  address:val("address")
  };
 
- let result;
- if(editingId!==null){
-  result=await db.from("Patients").update(patient).eq("id",editingId);
- }else{
-  result=await db.from("Patients").insert([patient]);
- }
+ try{
+  let patientId=editingId;
+  let oldPaths=[];
 
- if(result.error){
-  msg("Save failed: "+result.error.message);
+  if(editingId!==null){
+   const old=patients.find(p=>p.id===editingId);
+   oldPaths=old?.dental_images||[];
+   const {error}=await db.from("Patients").update(patient).eq("id",editingId);
+   if(error)throw error;
+  }else{
+   const {data,error}=await db.from("Patients").insert([patient]).select().single();
+   if(error)throw error;
+   patientId=data.id;
+  }
+
+  const paths=await uploadImages(patientId,oldPaths);
+  if(paths.length){
+   const {error}=await db.from("Patients").update({dental_images:paths}).eq("id",patientId);
+   if(error)throw error;
+  }
+
+  msg(editingId!==null?"Patient updated successfully":"Patient saved successfully");
+  cancelEdit();
+  await loadPatients();
+ }catch(error){
+  msg("Save failed: "+error.message);
+ }
+}
+
+async function showDetails(p){
+ const box=document.getElementById("detailsBox");
+ const content=document.getElementById("detailsContent");
+ const imageBox=document.getElementById("imageContent");
+ content.replaceChildren();
+ imageBox.replaceChildren();
+
+ const fields=[
+ ["Name","full_name"],["Phone","phone"],["Age","age"],
+ ["Gender","gender"],["Registration Date","registration_date"],
+ ["Chief Complaint","chief_complaint"],["Diagnosis","diagnosis"],
+ ["Tooth Number","tooth_number"],["Treatment","treatment"],
+ ["Prescription","prescription"],["Next Appointment","next_appointment"],
+ ["Medical History","medical_history"],["Address","address"]
+ ];
+
+ fields.forEach(([label,key])=>{
+  const para=document.createElement("p");
+  const strong=document.createElement("strong");
+  strong.textContent=label+": ";
+  para.append(strong,document.createTextNode(p[key]??""));
+  content.appendChild(para);
+ });
+
+ box.classList.remove("hidden");
+ const paths=p.dental_images||[];
+
+ if(!paths.length){
+  imageBox.textContent="No photos or X-rays uploaded.";
   return;
  }
 
- msg(editingId!==null?"Patient updated successfully":"Patient saved successfully");
- cancelEdit();
- await loadPatients();
+ for(const path of paths){
+  const {data,error}=await db.storage.from("patient-images").createSignedUrl(path,300);
+  if(error){
+   const para=document.createElement("p");
+   para.textContent="Image could not be opened: "+error.message;
+   imageBox.appendChild(para);
+   continue;
+  }
+
+  const link=document.createElement("a");
+  link.href=data.signedUrl;
+  link.target="_blank";
+  link.rel="noopener";
+  link.textContent="Open image / X-ray";
+  link.style.display="block";
+  link.style.margin="10px 0";
+
+  const img=document.createElement("img");
+  img.src=data.signedUrl;
+  img.alt="Patient dental image";
+  imageBox.append(img,link);
+ }
+ window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
 }
 
 async function deletePatient(id){
@@ -235,13 +376,8 @@ async function deletePatient(id){
 
 async function checkLogin(){
  const {data:{session}}=await db.auth.getSession();
- if(session){
-  document.getElementById("loginBox").classList.add("hidden");
-  document.getElementById("app").classList.remove("hidden");
-  await loadPatients();
- }
+ if(session)await showApp();
 }
-
 checkLogin();
 </script>
 </body>
