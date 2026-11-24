@@ -291,7 +291,10 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2>🦷 Dental Chart / د غاښونو نقشه</h2>
 <p>ناروغ او د غاښونو د شمېرنې سیستم انتخاب کړه. دا انتخاب یوازې د نقشې د لیدلو لپاره دی.</p>
-<label>Select Patient</label><select id="chartPatient" onchange="loadDentalChart()"><option value="">Select a patient</option></select>
+<label>Search Patient by Name or Phone</label>
+<input id="chartPatientSearch" type="search" placeholder="Search patient name or phone...">
+<label>Select Patient</label>
+<select id="chartPatient" onchange="loadDentalChart()"><option value="">Select a patient</option></select>
 <label>Tooth Numbering System</label>
 <select id="chartSystem" onchange="renderDentalChart()">
 <option value="FDI">FDI System</option><option value="Universal">Universal System</option><option value="Palmer">Palmer System</option>
@@ -324,7 +327,10 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <section class="card page-section hidden" id="fullHistorySection">
 <button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2>📋 Patient Full History / د ناروغ بشپړ تاریخ</h2>
-<label>Select Patient</label><select id="historyPatient" onchange="loadFullHistory()"><option value="">Select a patient</option></select>
+<label>Search Patient by Name or Phone</label>
+<input id="historyPatientSearch" type="search" placeholder="Search patient name or phone...">
+<label>Select Patient</label>
+<select id="historyPatient" onchange="loadFullHistory()"><option value="">Select a patient</option></select>
 <button type="button" onclick="printFullHistory()">Print Full History</button>
 <p id="historyMessage" class="message"></p>
 <div id="fullHistoryContent"></div>
@@ -334,7 +340,10 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <section class="card page-section hidden" id="xrayGallerySection">
 <button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2>🩻 X-Ray Gallery / د ایکس‌رې ګالري</h2>
-<label>Select Patient</label><select id="galleryPatient" onchange="loadXrayGallery()"><option value="">Select a patient</option></select>
+<label>Search Patient by Name or Phone</label>
+<input id="galleryPatientSearch" type="search" placeholder="Search patient name or phone...">
+<label>Select Patient</label>
+<select id="galleryPatient" onchange="loadXrayGallery()"><option value="">Select a patient</option></select>
 <p id="galleryMessage" class="message"></p>
 <div id="galleryContent" class="gallery-grid"></div>
 </section>
@@ -531,7 +540,60 @@ function populatePaymentPatients(){
 }
 function filterPaymentPatients(){populatePaymentPatients()}
 function populateAdditionalPatients(){["treatmentPatient","printPatient","prescriptionPatient"].forEach(id=>fillPatientSelect(id,$(id).value))}
-function populateNewFeaturePatients(){["chartPatient","historyPatient","galleryPatient"].forEach(id=>fillPatientSelect(id,$(id).value))}
+
+/* NEW: SEARCHABLE PATIENT SELECTS FOR THREE SECTIONS */
+function fillSearchablePatientSelect(selectId,searchId){
+ const s=$(selectId);
+ if(!s)return;
+
+ const q=String($(searchId).value||"").trim().toLowerCase();
+ const previous=s.value;
+
+ s.replaceChildren();
+
+ const first=document.createElement("option");
+ first.value="";
+ first.textContent="Select a patient";
+ s.appendChild(first);
+
+ const filtered=patients.filter(p=>{
+  const name=String(p.full_name||"").toLowerCase();
+  const phone=String(p.phone||"").toLowerCase();
+  return name.includes(q)||phone.includes(q);
+ });
+
+ filtered.forEach(p=>{
+  const o=document.createElement("option");
+  o.value=String(p.id);
+  o.textContent=(p.full_name||"Unnamed")+" — "+(p.phone||"No phone");
+  s.appendChild(o);
+ });
+
+ if(filtered.some(p=>String(p.id)===String(previous))){
+  s.value=previous;
+ }
+}
+
+function populateNewFeaturePatients(){
+ fillSearchablePatientSelect("chartPatient","chartPatientSearch");
+ fillSearchablePatientSelect("historyPatient","historyPatientSearch");
+ fillSearchablePatientSelect("galleryPatient","galleryPatientSearch");
+}
+
+function setupNewFeatureSearch(){
+ const pairs=[
+  ["chartPatient","chartPatientSearch"],
+  ["historyPatient","historyPatientSearch"],
+  ["galleryPatient","galleryPatientSearch"]
+ ];
+
+ pairs.forEach(([selectId,searchId])=>{
+  $(searchId).addEventListener("input",()=>{
+   fillSearchablePatientSelect(selectId,searchId);
+  });
+ });
+}
+
 function renderPatients(){
  const q=value("search").toLowerCase(),branch=value("branchFilter"),body=$("patientRows");body.replaceChildren();
  const list=patients.filter(p=>(String(p.full_name||"").toLowerCase().includes(q)||String(p.phone||"").toLowerCase().includes(q))&&(branch==="all"||normalizeBranch(p.branch)===branch));
@@ -807,6 +869,7 @@ function printPrescription(){
 }
 
 /* START */
+setupNewFeatureSearch();
 initializeSupabase();
 checkLogin();
 </script>
