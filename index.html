@@ -132,9 +132,26 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <button type="button" id="saveAppointmentButton" onclick="saveAppointment()">Save Appointment</button>
 <button type="button" id="cancelAppointmentButton" class="secondary hidden" onclick="cancelAppointmentEdit()">Cancel Edit</button>
 <p id="appointmentMessage" class="message"></p>
-<hr><h3>Appointments List</h3>
-<label>Filter by Date</label><input type="date" id="appointmentFilterDate" onchange="renderAppointments()">
+
+<hr>
+<h3>Appointments List</h3>
+
+<label>Filter by Date</label>
+<input type="date" id="appointmentFilterDate" onchange="renderAppointments()">
+
+<label>Search by Patient Name or Phone</label>
+<input type="search" id="appointmentSearch" placeholder="Enter patient name or phone..." oninput="renderAppointments()">
+
+<label>Filter by Status</label>
+<select id="appointmentStatusFilter" onchange="renderAppointments()">
+<option value="all">All Statuses</option>
+<option value="Scheduled">Scheduled</option>
+<option value="Completed">Completed</option>
+<option value="Cancelled">Cancelled</option>
+</select>
+
 <button type="button" class="secondary" onclick="clearAppointmentFilter()">Show All</button>
+
 <div class="table-wrap"><table>
 <thead><tr><th>Patient</th><th>Phone</th><th>Date</th><th>Time</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
 <tbody id="appointmentRows"></tbody>
@@ -416,7 +433,7 @@ async function logout(){
  cancelEdit();cancelAppointmentEdit();isLoggingOut=false;
 }
 
-/* DASHBOARD - STATISTICS REMOVED */
+/* DASHBOARD */
 async function updateDashboard(){return}
 
 /* SETTINGS */
@@ -824,28 +841,88 @@ async function loadAppointments(){
  if(error){appointmentMessage("Appointments loading error: "+error.message);return}
  appointments=data||[];renderAppointments();
 }
-function patientForAppointment(id){return patients.find(p=>String(p.id)===String(id))}
-function renderAppointments(){
- const body=$("appointmentRows"),filter=value("appointmentFilterDate");body.replaceChildren();
- const list=appointments.filter(a=>!filter||a.appointment_date===filter);
- list.forEach(a=>{
-  const p=patientForAppointment(a.patient_id),tr=document.createElement("tr");
-  [p?.full_name||"Unknown patient",p?.phone||"",a.appointment_date,a.appointment_time,a.reason,a.status].forEach(v=>{
-   const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td);
-  });
-  const td=document.createElement("td");td.className="actions";
-  const e=document.createElement("button");e.textContent="Edit";e.onclick=()=>editAppointment(a);
-  const d=document.createElement("button");d.textContent="Delete";d.className="danger";d.onclick=()=>deleteAppointment(a.id);
-  td.append(e,d);tr.appendChild(td);body.appendChild(tr);
- });
- if(!list.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent="No appointments found.";tr.appendChild(td);body.appendChild(tr)}
+
+function patientForAppointment(id){
+ return patients.find(p=>String(p.id)===String(id));
 }
+
+function renderAppointments(){
+ const body=$("appointmentRows");
+ const filter=value("appointmentFilterDate");
+ const search=value("appointmentSearch").toLowerCase();
+ const statusFilter=value("appointmentStatusFilter");
+
+ body.replaceChildren();
+
+ const list=appointments.filter(a=>{
+  const p=patientForAppointment(a.patient_id);
+
+  const matchesDate=!filter||a.appointment_date===filter;
+
+  const name=String(p?.full_name||"").toLowerCase();
+  const phone=String(p?.phone||"").toLowerCase();
+
+  const matchesSearch=name.includes(search)||phone.includes(search);
+
+  const matchesStatus=statusFilter==="all"||
+   String(a.status||"")===statusFilter;
+
+  return matchesDate&&matchesSearch&&matchesStatus;
+ });
+
+ list.forEach(a=>{
+  const p=patientForAppointment(a.patient_id);
+  const tr=document.createElement("tr");
+
+  [p?.full_name||"Unknown patient",p?.phone||"",
+   a.appointment_date,a.appointment_time,a.reason,a.status
+  ].forEach(v=>{
+   const td=document.createElement("td");
+   td.textContent=v??"";
+   tr.appendChild(td);
+  });
+
+  const td=document.createElement("td");
+  td.className="actions";
+
+  const e=document.createElement("button");
+  e.textContent="Edit";
+  e.onclick=()=>editAppointment(a);
+
+  const d=document.createElement("button");
+  d.textContent="Delete";
+  d.className="danger";
+  d.onclick=()=>deleteAppointment(a.id);
+
+  td.append(e,d);
+  tr.appendChild(td);
+  body.appendChild(tr);
+ });
+
+ if(!list.length){
+  const tr=document.createElement("tr");
+  const td=document.createElement("td");
+  td.colSpan=7;
+  td.textContent="No appointments found.";
+  tr.appendChild(td);
+  body.appendChild(tr);
+ }
+}
+
 async function saveAppointment(){
  const patientId=value("appointment_patient"),date=value("appointment_date");
  if(!patientId){appointmentMessage("Please select a patient.");return}
  if(!date){appointmentMessage("Please select appointment date.");return}
- const record={patient_id:patientId,appointment_date:date,appointment_time:value("appointment_time")||null,
- reason:value("appointment_reason"),status:value("appointment_status"),notes:value("appointment_notes")};
+
+ const record={
+  patient_id:patientId,
+  appointment_date:date,
+  appointment_time:value("appointment_time")||null,
+  reason:value("appointment_reason"),
+  status:value("appointment_status"),
+  notes:value("appointment_notes")
+ };
+
  $("saveAppointmentButton").disabled=true;
  try{
   if(editingAppointmentId!==null){
@@ -857,30 +934,56 @@ async function saveAppointment(){
    if(error)throw error;
    appointmentMessage("Appointment saved successfully.");
   }
-  cancelAppointmentEdit();await loadAppointments();
- }catch(e){appointmentMessage("Appointment error: "+e.message)}
- finally{$("saveAppointmentButton").disabled=false}
+  cancelAppointmentEdit();
+  await loadAppointments();
+ }catch(e){
+  appointmentMessage("Appointment error: "+e.message);
+ }finally{
+  $("saveAppointmentButton").disabled=false;
+ }
 }
+
 function editAppointment(a){
- editingAppointmentId=a.id;setValue("appointment_patient",a.patient_id);setValue("appointment_date",a.appointment_date);
- setValue("appointment_time",a.appointment_time);setValue("appointment_reason",a.reason);
- setValue("appointment_status",a.status);setValue("appointment_notes",a.notes);
- $("appointmentTitle").textContent="Edit Appointment";$("saveAppointmentButton").textContent="Update Appointment";
- $("cancelAppointmentButton").classList.remove("hidden");$("appointmentTitle").scrollIntoView({behavior:"smooth"});
+ editingAppointmentId=a.id;
+ setValue("appointment_patient",a.patient_id);
+ setValue("appointment_date",a.appointment_date);
+ setValue("appointment_time",a.appointment_time);
+ setValue("appointment_reason",a.reason);
+ setValue("appointment_status",a.status);
+ setValue("appointment_notes",a.notes);
+ $("appointmentTitle").textContent="Edit Appointment";
+ $("saveAppointmentButton").textContent="Update Appointment";
+ $("cancelAppointmentButton").classList.remove("hidden");
+ $("appointmentTitle").scrollIntoView({behavior:"smooth"});
 }
+
 function cancelAppointmentEdit(){
- editingAppointmentId=null;setValue("appointment_patient","");setValue("appointment_date","");
- setValue("appointment_time","");setValue("appointment_reason","");setValue("appointment_status","Scheduled");
- setValue("appointment_notes","");$("appointmentTitle").textContent="Appointment Management";
- $("saveAppointmentButton").textContent="Save Appointment";$("cancelAppointmentButton").classList.add("hidden");
+ editingAppointmentId=null;
+ setValue("appointment_patient","");
+ setValue("appointment_date","");
+ setValue("appointment_time","");
+ setValue("appointment_reason","");
+ setValue("appointment_status","Scheduled");
+ setValue("appointment_notes","");
+ $("appointmentTitle").textContent="Appointment Management";
+ $("saveAppointmentButton").textContent="Save Appointment";
+ $("cancelAppointmentButton").classList.add("hidden");
 }
+
 async function deleteAppointment(id){
  if(!confirm("Are you sure you want to delete this appointment?"))return;
  const {error}=await db.from("appointments").delete().eq("id",id);
  if(error){appointmentMessage("Delete error: "+error.message);return}
- appointmentMessage("Appointment deleted.");await loadAppointments();
+ appointmentMessage("Appointment deleted.");
+ await loadAppointments();
 }
-function clearAppointmentFilter(){$("appointmentFilterDate").value="";renderAppointments()}
+
+function clearAppointmentFilter(){
+ $("appointmentFilterDate").value="";
+ $("appointmentSearch").value="";
+ $("appointmentStatusFilter").value="all";
+ renderAppointments();
+}
 
 /* PAYMENTS */
 async function loadPatientAccount(){
@@ -902,6 +1005,7 @@ async function loadPatientAccount(){
  });
  if(!paymentHistory.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="No payment history yet.";tr.appendChild(td);body.appendChild(tr)}
 }
+
 async function savePayment(){
  const patientId=value("payment_patient");if(!patientId){$("paymentMessage").textContent="Please select a patient.";return}
  const totalFee=Number(value("payment_total_fee")),amount=Number(value("payment_amount")||0),date=value("payment_date");
