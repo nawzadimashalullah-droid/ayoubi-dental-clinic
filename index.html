@@ -181,12 +181,9 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <h2>Patient Account / Payments</h2>
 
 <label>Search Patient by Name or Phone</label>
-<input
- id="paymentPatientSearch"
- type="search"
- placeholder="Type patient name or phone number..."
- oninput="filterPaymentPatients()"
->
+<input id="paymentPatientSearch" type="search"
+placeholder="Type patient name or phone number..."
+oninput="filterPaymentPatients()">
 
 <label>Select Patient</label>
 <select id="payment_patient" onchange="loadPatientAccount()">
@@ -249,6 +246,13 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <button type="button" class="back-button" onclick="closeDetails()">← Back to Search Patients</button>
 <h2>Patient Details</h2>
 <div id="detailsContent"></div>
+
+<!-- NEW: PATIENT PAYMENT ACCOUNT IN DETAILS -->
+<h3>Patient Payment Account</h3>
+<div id="detailsPaymentContent">
+Loading payment information...
+</div>
+
 <h3>Patient Photos / X-rays</h3>
 <div id="imageContent"></div>
 <button type="button" class="secondary" onclick="closeDetails()">Close</button>
@@ -570,19 +574,156 @@ function addDetail(parent,label,detailValue){
  parent.appendChild(p);
 }
 
+/* NEW: DISPLAY PAYMENT ACCOUNT INSIDE PATIENT DETAILS */
+
 async function showDetails(patient){
- const box=$("detailsBox"),content=$("detailsContent"),images=$("imageContent");
- content.replaceChildren();images.replaceChildren();
- patientFields.forEach(k=>addDetail(content,k.replaceAll("_"," "),patient[k]));
- box.classList.remove("hidden");box.scrollIntoView({behavior:"smooth"});
+ const box=$("detailsBox");
+ const content=$("detailsContent");
+ const images=$("imageContent");
+ const paymentBox=$("detailsPaymentContent");
+
+ content.replaceChildren();
+ images.replaceChildren();
+ paymentBox.textContent="Loading payment information...";
+
+ patientFields.forEach(k=>
+  addDetail(content,k.replaceAll("_"," "),patient[k])
+ );
+
+ box.classList.remove("hidden");
+ box.scrollIntoView({behavior:"smooth"});
+
+ // Load payment records for this specific patient
+ try{
+  const {data,error}=await db.from("patient_payments")
+   .select("*")
+   .eq("patient_id",patient.id)
+   .order("created_at",{ascending:true});
+
+  if(error)throw error;
+
+  const history=data||[];
+  const latest=history.length
+   ? history[history.length-1]
+   : null;
+
+  const totalFee=latest
+   ? Number(latest.total_fee||0)
+   : 0;
+
+  const totalPaid=history.reduce(
+   (sum,row)=>sum+Number(row.amount_paid||0),0
+  );
+
+  const balance=totalFee-totalPaid;
+
+  paymentBox.replaceChildren();
+
+  const stats=document.createElement("div");
+  stats.className="stat-grid";
+
+  function addPaymentStat(label,amount){
+   const card=document.createElement("div");
+   card.className="stat";
+
+   const title=document.createElement("div");
+   title.textContent=label;
+
+   const strong=document.createElement("strong");
+   strong.textContent=amount.toFixed(2);
+
+   card.append(title,strong);
+   stats.appendChild(card);
+  }
+
+  addPaymentStat("Total Treatment Fee",totalFee);
+  addPaymentStat("Total Paid",totalPaid);
+  addPaymentStat("Remaining Balance",balance);
+
+  paymentBox.appendChild(stats);
+
+  const heading=document.createElement("h3");
+  heading.textContent="Payment History";
+  paymentBox.appendChild(heading);
+
+  const wrap=document.createElement("div");
+  wrap.className="table-wrap";
+
+  const table=document.createElement("table");
+  const thead=document.createElement("thead");
+  const headerRow=document.createElement("tr");
+
+  ["Date","Total Fee","Amount Paid","Notes"].forEach(label=>{
+   const th=document.createElement("th");
+   th.textContent=label;
+   headerRow.appendChild(th);
+  });
+
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody=document.createElement("tbody");
+
+  if(history.length){
+   [...history].reverse().forEach(row=>{
+    const tr=document.createElement("tr");
+
+    [
+     row.payment_date||"",
+     Number(row.total_fee||0).toFixed(2),
+     Number(row.amount_paid||0).toFixed(2),
+     row.notes||""
+    ].forEach(v=>{
+     const td=document.createElement("td");
+     td.textContent=v;
+     tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+   });
+  }else{
+   const tr=document.createElement("tr");
+   const td=document.createElement("td");
+   td.colSpan=4;
+   td.textContent="No payment history yet.";
+   tr.appendChild(td);
+   tbody.appendChild(tr);
+  }
+
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  paymentBox.appendChild(wrap);
+
+ }catch(error){
+  paymentBox.textContent="Payment loading error: "+error.message;
+ }
+
+ // Load patient photos
  const paths=patient.dental_images||[];
- if(!paths.length){images.textContent="No images uploaded.";return}
+
+ if(!paths.length){
+  images.textContent="No images uploaded.";
+  return;
+ }
+
  for(const path of paths){
-  const {data,error}=await db.storage.from("patient-images").createSignedUrl(path,3600);
-  if(error){const p=document.createElement("p");p.textContent="Image access error: "+error.message;images.appendChild(p);continue}
+  const {data,error}=await db.storage
+   .from("patient-images")
+   .createSignedUrl(path,3600);
+
+  if(error){
+   const p=document.createElement("p");
+   p.textContent="Image access error: "+error.message;
+   images.appendChild(p);
+   continue;
+  }
+
   const img=document.createElement("img");
-  img.className="patient-image";img.src=data.signedUrl;img.alt="Patient dental image";
-  img.loading="lazy";img.style.cursor="pointer";
+  img.className="patient-image";
+  img.src=data.signedUrl;
+  img.alt="Patient dental image";
+  img.loading="lazy";
+  img.style.cursor="pointer";
   img.onclick=()=>window.open(data.signedUrl,"_blank");
   images.appendChild(img);
  }
