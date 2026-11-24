@@ -277,22 +277,12 @@ img.patient-image{
 </div>
 
 <script>
+"use strict";
+
 const SUPABASE_URL="https://qrmgjgzgvbisuhqimqmd.supabase.co";
 const SUPABASE_KEY="sb_publishable_-VKLHhcBBx6DuKNokMLQ_wWWBchyh";
 
 let db=null;
-
-if(window.supabase && window.supabase.createClient){
- db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
-  auth:{
-   persistSession:true,
-   storage:window.sessionStorage,
-   autoRefreshToken:true,
-   detectSessionInUrl:true
-  }
- });
-}
-
 let patients=[];
 let appointments=[];
 let editingId=null;
@@ -305,8 +295,35 @@ const $=id=>document.getElementById(id);
 const value=id=>$(id).value.trim();
 const setValue=(id,v)=>$(id).value=v??"";
 
-function showMessage(text){$("message").textContent=text}
-function appointmentMessage(text){$("appointmentMessage").textContent=text}
+function showMessage(text){
+ $("message").textContent=text;
+}
+
+function appointmentMessage(text){
+ $("appointmentMessage").textContent=text;
+}
+
+function initializeSupabase(){
+ if(!window.supabase || !window.supabase.createClient){
+  $("loginMessage").textContent="Supabase library did not load. Please refresh.";
+  return false;
+ }
+
+ try{
+  db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
+   auth:{
+    persistSession:true,
+    storage:window.sessionStorage,
+    autoRefreshToken:true,
+    detectSessionInUrl:true
+   }
+  });
+  return true;
+ }catch(error){
+  $("loginMessage").textContent="Supabase error: "+error.message;
+  return false;
+ }
+}
 
 $("togglePassword").addEventListener("click",()=>{
  const input=$("password");
@@ -315,12 +332,16 @@ $("togglePassword").addEventListener("click",()=>{
 });
 
 $("loginButton").addEventListener("click",login);
-$("password").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
-$("email").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
+$("password").addEventListener("keydown",e=>{
+ if(e.key==="Enter")login();
+});
+$("email").addEventListener("keydown",e=>{
+ if(e.key==="Enter")login();
+});
 
 async function login(){
  if(!db){
-  $("loginMessage").textContent="Supabase could not load. Refresh the page.";
+  $("loginMessage").textContent="Supabase is not connected. Refresh the page.";
   return;
  }
 
@@ -336,8 +357,9 @@ async function login(){
  $("loginMessage").textContent="Logging in...";
 
  try{
-  const {error}=await db.auth.signInWithPassword({email,password});
+  const {data,error}=await db.auth.signInWithPassword({email,password});
   if(error)throw error;
+  if(!data.session)throw new Error("Login session was not created.");
 
   sessionStorage.setItem("clinicLoginTime",String(Date.now()));
   await showApp();
@@ -352,11 +374,11 @@ async function login(){
 function startSessionTimer(){
  if(logoutTimer)clearTimeout(logoutTimer);
 
- let started=Number(sessionStorage.getItem("clinicLoginTime"));
+ const started=Number(sessionStorage.getItem("clinicLoginTime"));
 
  if(!started){
-  started=Date.now();
-  sessionStorage.setItem("clinicLoginTime",String(started));
+  logout();
+  return;
  }
 
  const remaining=SESSION_LIMIT_MS-(Date.now()-started);
@@ -373,8 +395,10 @@ async function showApp(){
  startSessionTimer();
  $("loginBox").classList.add("hidden");
  $("app").classList.remove("hidden");
+
  await loadPatients();
  await loadAppointments();
+
  showMessage("Login successful");
 }
 
@@ -384,12 +408,13 @@ async function logout(){
 
  if(logoutTimer)clearTimeout(logoutTimer);
  logoutTimer=null;
+
  sessionStorage.removeItem("clinicLoginTime");
 
  try{
   if(db)await db.auth.signOut();
- }catch(e){
-  console.error(e);
+ }catch(error){
+  console.error(error);
  }
 
  $("app").classList.add("hidden");
@@ -401,6 +426,7 @@ async function logout(){
 
  patients=[];
  appointments=[];
+
  cancelEdit();
  cancelAppointmentEdit();
 
@@ -408,16 +434,13 @@ async function logout(){
 }
 
 async function checkLogin(){
- if(!db){
-  $("loginMessage").textContent="Supabase library did not load. Refresh the page.";
-  return;
- }
+ if(!db)return;
 
  try{
-  const {data:{session},error}=await db.auth.getSession();
+  const {data,error}=await db.auth.getSession();
   if(error)throw error;
 
-  if(session){
+  if(data.session){
    const started=Number(sessionStorage.getItem("clinicLoginTime"));
 
    if(started && Date.now()-started<SESSION_LIMIT_MS){
@@ -525,7 +548,6 @@ const patientFields=[
 
 function editPatient(p){
  editingId=p.id;
-
  patientFields.forEach(k=>setValue(k,p[k]));
 
  $("patientFormTitle").textContent="Edit Patient";
@@ -549,11 +571,8 @@ async function uploadImages(patientId,oldPaths=[]){
  const files=Array.from($("dentalFiles").files||[]);
  if(!files.length)return oldPaths;
 
- const {data:{user},error:userError}=await db.auth.getUser();
-
- if(userError||!user){
-  throw new Error("Please login again.");
- }
+ const {data,error:userError}=await db.auth.getUser();
+ if(userError||!data.user)throw new Error("Please login again.");
 
  const paths=[...(oldPaths||[])];
 
@@ -565,11 +584,11 @@ async function uploadImages(patientId,oldPaths=[]){
   }
 
   const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
-  const path=user.id+"/"+patientId+"/"+Date.now()+"-"+safeName;
+  const path=data.user.id+"/"+patientId+"/"+Date.now()+"-"+safeName;
 
   const {error}=await db.storage.from("patient-images").upload(path,file);
-
   if(error)throw error;
+
   paths.push(path);
  }
 
@@ -652,12 +671,12 @@ async function deletePatient(id){
  await loadAppointments();
 }
 
-function addDetail(parent,label,value){
+function addDetail(parent,label,detailValue){
  const p=document.createElement("p");
  const strong=document.createElement("strong");
 
  strong.textContent=label+": ";
- p.append(strong,document.createTextNode(value==null?"":String(value)));
+ p.append(strong,document.createTextNode(detailValue==null?"":String(detailValue)));
  parent.appendChild(p);
 }
 
@@ -709,7 +728,9 @@ function closeDetails(){
 }
 
 async function loadAppointments(){
- const {data,error}=await db.from("appointments").select("*").order("appointment_date",{ascending:true});
+ const {data,error}=await db.from("appointments")
+  .select("*")
+  .order("appointment_date",{ascending:true});
 
  if(error){
   appointmentMessage("Appointments loading error: "+error.message);
@@ -793,7 +814,7 @@ async function saveAppointment(){
  const record={
   patient_id:patientId,
   appointment_date:date,
-  appointment_time:value("appointment_time"),
+  appointment_time:value("appointment_time")||null,
   reason:value("appointment_reason"),
   status:value("appointment_status"),
   notes:value("appointment_notes")
@@ -808,7 +829,6 @@ async function saveAppointment(){
    if(error)throw error;
    appointmentMessage("Appointment updated successfully.");
   }else{
-   record.id=Date.now();
    const {error}=await db.from("appointments").insert([record]);
    if(error)throw error;
    appointmentMessage("Appointment saved successfully.");
@@ -828,10 +848,4 @@ function editAppointment(a){
  editingAppointmentId=a.id;
 
  setValue("appointment_patient",a.patient_id);
- setValue("appointment_date",a.appointment_date);
- setValue("appointment_time",a.appointment_time);
- setValue("appointment_reason",a.reason);
- setValue("appointment_status",a.status);
- setValue("appointment_notes",a.notes);
-
- $("appointmentTitle").textContent="Edit Appoi
+ setValue("appointment_date",a.appointmen
