@@ -44,7 +44,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 .stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .stat{background:#fff0f6;padding:14px;border-radius:10px;text-align:center}
 .stat strong{display:block;font-size:20px;color:#c94f83;margin-top:7px;overflow-wrap:anywhere}
-.back-button{background:#96828d}
+.back-button{background:#96828d;display:inline-block;margin-bottom:10px}
 @media(max-width:600px){
  body{padding:8px}.card{padding:12px}header{padding:18px 8px}
  button{padding:9px 11px}.menu-grid{grid-template-columns:1fr 1fr}
@@ -94,7 +94,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 
 <!-- PATIENT REGISTRATION -->
 <section class="card page-section hidden" id="patientSection">
-<button class="back-button" onclick="showSection('dashboardSection')">← Dashboard</button>
+<button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2 id="patientFormTitle">Register New Patient</h2>
 
 <label>Full Name</label>
@@ -137,7 +137,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 
 <!-- APPOINTMENTS -->
 <section class="card page-section hidden" id="appointmentSection">
-<button class="back-button" onclick="showSection('dashboardSection')">← Dashboard</button>
+<button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2 id="appointmentTitle">Appointment Management</h2>
 
 <label>Select Patient</label>
@@ -177,7 +177,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 
 <!-- PATIENT PAYMENTS -->
 <section class="card page-section hidden" id="paymentSection">
-<button class="back-button" onclick="showSection('dashboardSection')">← Dashboard</button>
+<button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2>Patient Account / Payments</h2>
 
 <label>Search Patient by Name or Phone</label>
@@ -232,7 +232,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 
 <!-- SEARCH -->
 <section class="card page-section hidden" id="searchSection">
-<button class="back-button" onclick="showSection('dashboardSection')">← Dashboard</button>
+<button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2>Search Patient Records</h2>
 <input id="search" placeholder="Search patient name or phone" oninput="renderPatients()">
 
@@ -246,6 +246,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 
 <!-- PATIENT DETAILS -->
 <section class="card hidden" id="detailsBox">
+<button type="button" class="back-button" onclick="closeDetails()">← Back to Search Patients</button>
 <h2>Patient Details</h2>
 <div id="detailsContent"></div>
 <h3>Patient Photos / X-rays</h3>
@@ -586,7 +587,11 @@ async function showDetails(patient){
   images.appendChild(img);
  }
 }
-function closeDetails(){$("detailsBox").classList.add("hidden")}
+
+function closeDetails(){
+ $("detailsBox").classList.add("hidden");
+ window.scrollTo({top:0,behavior:"smooth"});
+}
 
 async function loadAppointments(){
  const {data,error}=await db.from("appointments").select("*").order("appointment_date",{ascending:true});
