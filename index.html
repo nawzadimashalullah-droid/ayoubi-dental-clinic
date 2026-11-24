@@ -128,6 +128,14 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <label>Select Patient</label><select id="appointment_patient"><option value="">Select a patient</option></select>
 <label>Appointment Date</label><input type="date" id="appointment_date">
 <label>Appointment Time</label><input type="time" id="appointment_time">
+
+<label>Appointment Branch / د ملاقات څانګه</label>
+<select id="appointment_branch">
+<option value="Main Branch">Main Branch</option>
+<option value="Second Representative Branch">Second Representative Branch</option>
+<option value="Third Representative Branch">Third Representative Branch</option>
+</select>
+
 <label>Reason</label><textarea id="appointment_reason"></textarea>
 <label>Status</label>
 <select id="appointment_status"><option>Scheduled</option><option>Completed</option><option>Cancelled</option></select>
@@ -146,7 +154,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 </select>
 <button type="button" class="secondary" onclick="clearAppointmentFilter()">Show All</button>
 <div class="table-wrap"><table>
-<thead><tr><th>Patient</th><th>Phone</th><th>Date</th><th>Time</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
+<thead><tr><th>Patient</th><th>Phone</th><th>Date</th><th>Time</th><th>Branch</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
 <tbody id="appointmentRows"></tbody>
 </table></div>
 </section>
@@ -653,7 +661,8 @@ async function restoreBackup(){
   }
   $("restoreMessage").textContent="Restoring appointments...";
   if(backup.appointments.length){
-   const {error}=await db.from("appointments").upsert(backup.appointments,{onConflict:"id"});
+   const appointmentRecords=backup.appointments.map(a=>({...a,branch:normalizeBranch(a.branch)}));
+   const {error}=await db.from("appointments").upsert(appointmentRecords,{onConflict:"id"});
    if(error)throw new Error("Appointments: "+error.message);
   }
   $("restoreMessage").textContent="Restoring payments...";
@@ -874,7 +883,15 @@ function renderAppointments(){
  });
  list.forEach(a=>{
   const p=patientForAppointment(a.patient_id),tr=document.createElement("tr");
-  [p?.full_name||"Unknown patient",p?.phone||"",a.appointment_date,a.appointment_time,a.reason,a.status].forEach(v=>{
+  [
+   p?.full_name||"Unknown patient",
+   p?.phone||"",
+   a.appointment_date,
+   a.appointment_time,
+   normalizeBranch(a.branch),
+   a.reason,
+   a.status
+  ].forEach(v=>{
    const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td);
   });
   const td=document.createElement("td");td.className="actions";
@@ -883,7 +900,7 @@ function renderAppointments(){
   td.append(e,d);tr.appendChild(td);body.appendChild(tr);
  });
  if(!list.length){
-  const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent="No appointments found.";
+  const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=8;td.textContent="No appointments found.";
   tr.appendChild(td);body.appendChild(tr);
  }
 }
@@ -891,8 +908,17 @@ async function saveAppointment(){
  const patientId=value("appointment_patient"),date=value("appointment_date");
  if(!patientId){appointmentMessage("Please select a patient.");return}
  if(!date){appointmentMessage("Please select appointment date.");return}
- const record={patient_id:patientId,appointment_date:date,appointment_time:value("appointment_time")||null,
-  reason:value("appointment_reason"),status:value("appointment_status"),notes:value("appointment_notes")};
+ const selectedBranch=value("appointment_branch");
+ if(!BRANCHES.includes(selectedBranch)){appointmentMessage("Please select a valid appointment branch.");return}
+ const record={
+  patient_id:patientId,
+  appointment_date:date,
+  appointment_time:value("appointment_time")||null,
+  branch:selectedBranch,
+  reason:value("appointment_reason"),
+  status:value("appointment_status"),
+  notes:value("appointment_notes")
+ };
  $("saveAppointmentButton").disabled=true;
  try{
   if(editingAppointmentId!==null){
@@ -907,9 +933,13 @@ async function saveAppointment(){
  finally{$("saveAppointmentButton").disabled=false}
 }
 function editAppointment(a){
- editingAppointmentId=a.id;setValue("appointment_patient",a.patient_id);
- setValue("appointment_date",a.appointment_date);setValue("appointment_time",a.appointment_time);
- setValue("appointment_reason",a.reason);setValue("appointment_status",a.status);
+ editingAppointmentId=a.id;
+ setValue("appointment_patient",a.patient_id);
+ setValue("appointment_date",a.appointment_date);
+ setValue("appointment_time",a.appointment_time);
+ setValue("appointment_branch",normalizeBranch(a.branch));
+ setValue("appointment_reason",a.reason);
+ setValue("appointment_status",a.status);
  setValue("appointment_notes",a.notes);
  $("appointmentTitle").textContent="Edit Appointment";
  $("saveAppointmentButton").textContent="Update Appointment";
@@ -917,9 +947,15 @@ function editAppointment(a){
  $("appointmentTitle").scrollIntoView({behavior:"smooth"});
 }
 function cancelAppointmentEdit(){
- editingAppointmentId=null;setValue("appointment_patient","");setValue("appointment_date","");
- setValue("appointment_time","");setValue("appointment_reason","");setValue("appointment_status","Scheduled");
- setValue("appointment_notes","");$("appointmentTitle").textContent="Appointment Management";
+ editingAppointmentId=null;
+ setValue("appointment_patient","");
+ setValue("appointment_date","");
+ setValue("appointment_time","");
+ setValue("appointment_branch","Main Branch");
+ setValue("appointment_reason","");
+ setValue("appointment_status","Scheduled");
+ setValue("appointment_notes","");
+ $("appointmentTitle").textContent="Appointment Management";
  $("saveAppointmentButton").textContent="Save Appointment";
  $("cancelAppointmentButton").classList.add("hidden");
 }
@@ -1023,7 +1059,6 @@ async function saveTreatment(){
  try{
   const {error}=await db.from("patient_treatments").insert([record]);
   if(error)throw error;
-  $("treatmentMessage").textContent="Treatment saved successfully.";
   setValue("treatmentTooth","");setValue("treatmentDiagnosis","");
   setValue("treatmentDescription","");setValue("treatmentNotes","");
   await loadTreatmentHistory();
@@ -1054,8 +1089,12 @@ function renderReminders(){
   const detail=document.createElement("p");
   detail.textContent="Date: "+a.appointment_date+" | Time: "+(a.appointment_time||"Not set")+
    " | Phone: "+(p?.phone||"Not available");
-  const reason=document.createElement("p");reason.textContent="Reason: "+(a.reason||"Not specified");
-  card.append(title,detail,reason);box.appendChild(card);
+  const branch=document.createElement("p");
+  branch.textContent="Branch: "+normalizeBranch(a.branch);
+  const reason=document.createElement("p");
+  reason.textContent="Reason: "+(a.reason||"Not specified");
+  card.append(title,detail,branch,reason);
+  box.appendChild(card);
  });
 }
 
