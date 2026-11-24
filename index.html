@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ps">
 <head>
@@ -6,17 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ayoubi Dental Clinic</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <style>
 body{font-family:Arial,sans-serif;background:#f1f5f9;margin:0;padding:14px;color:#172554}
 .container{max-width:1000px;margin:auto}
 header{background:#087e8b;color:white;padding:20px;text-align:center;border-radius:12px}
 .card{background:white;padding:16px;border-radius:12px;margin:14px 0;box-shadow:0 2px 8px #ddd}
 input,select,textarea{width:100%;box-sizing:border-box;padding:11px;margin:6px 0 12px;border:1px solid #ccc;border-radius:7px}
+.password-wrap{display:flex;gap:6px;align-items:center}
+.password-wrap input{flex:1;min-width:0}
+.password-wrap button{margin:6px 0 12px;white-space:nowrap}
 button{padding:10px 14px;background:#087e8b;color:white;border:0;border-radius:7px;margin:3px;cursor:pointer}
-.danger{background:#c62828}
-.secondary{background:#64748b}
-.success{background:#2e7d32}
+.danger{background:#c62828}.secondary{background:#64748b}.success{background:#2e7d32}
 table{width:100%;border-collapse:collapse;min-width:650px}
 td,th{border:1px solid #ddd;padding:8px;text-align:left}
 th{background:#e0f2f1}
@@ -25,28 +24,10 @@ th{background:#e0f2f1}
 #message{font-weight:bold}
 img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 .status{font-weight:bold}
-
-/* Password show/hide */
-.password-wrap{position:relative}
-.password-wrap input{padding-right:55px}
-.password-toggle{
- position:absolute;
- right:8px;
- top:50%;
- transform:translateY(-50%);
- background:transparent;
- color:#087e8b;
- border:0;
- padding:6px;
- font-size:21px;
- margin:0;
-}
 </style>
 </head>
-
 <body>
 <div class="container">
-
 <header>
 <h1>Ayoubi Dental Clinic</h1>
 <p>Patient Management System</p>
@@ -54,21 +35,17 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 
 <div class="card" id="loginBox">
 <h2>Login</h2>
-
 <label>Email</label>
 <input id="email" type="email" placeholder="Email">
-
 <label>Password</label>
 <div class="password-wrap">
 <input id="password" type="password" placeholder="Password">
-<button type="button" class="password-toggle" onclick="togglePassword()" id="passwordToggle">👁️</button>
+<button type="button" class="secondary" id="togglePasswordBtn" onclick="togglePassword()">👁️</button>
 </div>
-
 <button onclick="login()">Login</button>
 </div>
 
 <div id="app" class="hidden">
-
 <div class="card">
 <h2>Dashboard</h2>
 <button onclick="logout()">Logout</button>
@@ -77,85 +54,63 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 
 <div class="card">
 <h2 id="formTitle">Register New Patient</h2>
-
 <label>Patient Full Name</label>
 <input id="full_name" placeholder="Full Name">
-
 <label>Phone Number</label>
 <input id="phone" placeholder="Phone Number">
-
 <label>Age</label>
 <input id="age" type="number" placeholder="Age">
-
 <label>Gender</label>
 <select id="gender">
 <option value="">Select Gender</option>
 <option>Male</option>
 <option>Female</option>
 </select>
-
 <label>Registration Date</label>
 <input id="registration_date" type="date">
-
 <label>Chief Complaint</label>
 <textarea id="chief_complaint"></textarea>
-
 <label>Diagnosis</label>
 <textarea id="diagnosis" placeholder="Diagnosis"></textarea>
-
 <label>Tooth Number</label>
 <input id="tooth_number" placeholder="Example: 11, 16, 36">
-
 <label>Treatment Performed</label>
 <textarea id="treatment" placeholder="Treatment"></textarea>
-
 <label>Prescription and Medication</label>
 <textarea id="prescription" placeholder="Medicine and dosage"></textarea>
-
 <label>Next Appointment Date</label>
 <input id="next_appointment" type="date">
-
 <label>Medical History</label>
 <textarea id="medical_history"></textarea>
-
 <label>Address</label>
 <textarea id="address"></textarea>
-
 <label>Dental Photos and X-rays</label>
 <input id="dentalFiles" type="file" accept="image/*" multiple>
 <p>Choose dental photos or X-ray images.</p>
-
 <button onclick="savePatient()" id="saveButton">Save Patient</button>
 <button onclick="cancelEdit()" id="cancelButton" class="secondary hidden">Cancel Edit</button>
 </div>
 
 <div class="card" id="appointmentsCard">
 <h2 id="appointmentFormTitle">Appointment Management</h2>
-
 <label>Select Patient</label>
 <select id="appointment_patient">
 <option value="">Select a patient</option>
 </select>
-
 <label>Appointment Date</label>
 <input id="appointment_date" type="date">
-
 <label>Appointment Time</label>
 <input id="appointment_time" type="time">
-
 <label>Reason for Appointment</label>
 <textarea id="appointment_reason" placeholder="Reason / Treatment"></textarea>
-
 <label>Status</label>
 <select id="appointment_status">
 <option value="Scheduled">Scheduled</option>
 <option value="Completed">Completed</option>
 <option value="Cancelled">Cancelled</option>
 </select>
-
 <label>Notes</label>
 <textarea id="appointment_notes" placeholder="Additional notes"></textarea>
-
 <button onclick="saveAppointment()" id="appointmentSaveButton">Save Appointment</button>
 <button onclick="cancelAppointmentEdit()" id="appointmentCancelButton" class="secondary hidden">Cancel Edit</button>
 <p id="appointmentMessage"></p>
@@ -163,24 +118,13 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 
 <div class="card">
 <h2>Appointments List</h2>
-
 <label>Filter by date</label>
 <input id="appointmentFilterDate" type="date" onchange="renderAppointments()">
-
 <button class="secondary" onclick="clearAppointmentFilter()">Show All</button>
-
 <div class="table-wrap">
 <table>
 <thead>
-<tr>
-<th>Patient</th>
-<th>Phone</th>
-<th>Date</th>
-<th>Time</th>
-<th>Reason</th>
-<th>Status</th>
-<th>Actions</th>
-</tr>
+<tr><th>Patient</th><th>Phone</th><th>Date</th><th>Time</th><th>Reason</th><th>Status</th><th>Actions</th></tr>
 </thead>
 <tbody id="appointmentRows"></tbody>
 </table>
@@ -190,16 +134,10 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 <div class="card">
 <h2>Patient Records</h2>
 <input id="search" placeholder="Search name or phone" oninput="renderPatients()">
-
 <div class="table-wrap">
 <table>
 <thead>
-<tr>
-<th>Name</th>
-<th>Phone</th>
-<th>Age</th>
-<th>Actions</th>
-</tr>
+<tr><th>Name</th><th>Phone</th><th>Age</th><th>Actions</th></tr>
 </thead>
 <tbody id="patientRows"></tbody>
 </table>
@@ -213,7 +151,6 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 <div id="imageContent"></div>
 <button onclick="document.getElementById('detailsBox').classList.add('hidden')">Close</button>
 </div>
-
 </div>
 </div>
 
@@ -223,9 +160,10 @@ const SUPABASE_KEY="sb_publishable_-VKLHhcBBx6DuKNokUkMLQ_wWWBchyh";
 
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
  auth:{
-  persistSession:false,
-  autoRefreshToken:false,
-  detectSessionInUrl:false
+  persistSession:true,
+  storage:window.sessionStorage,
+  autoRefreshToken:true,
+  detectSessionInUrl:true
  }
 });
 
@@ -234,19 +172,8 @@ let appointments=[];
 let editingId=null;
 let editingAppointmentId=null;
 
-/* Show or hide password */
-function togglePassword(){
- const password=document.getElementById("password");
- const button=document.getElementById("passwordToggle");
-
- if(password.type==="password"){
-  password.type="text";
-  button.textContent="🙈";
- }else{
-  password.type="password";
-  button.textContent="👁️";
- }
-}
+const SESSION_LIMIT_MS=60*60*1000;
+let logoutTimer=null;
 
 function msg(t){
  document.getElementById("message").textContent=t;
@@ -264,14 +191,37 @@ function setVal(id,v){
  document.getElementById(id).value=v??"";
 }
 
+function togglePassword(){
+ const password=document.getElementById("password");
+ const button=document.getElementById("togglePasswordBtn");
+ const visible=password.type==="password";
+ password.type=visible?"text":"password";
+ button.textContent=visible?"🙈":"👁️";
+}
+
+function startSessionTimer(){
+ if(logoutTimer)clearTimeout(logoutTimer);
+
+ let startedAt=Number(sessionStorage.getItem("clinicLoginTime"));
+
+ if(!startedAt){
+  startedAt=Date.now();
+  sessionStorage.setItem("clinicLoginTime",String(startedAt));
+ }
+
+ const remaining=SESSION_LIMIT_MS-(Date.now()-startedAt);
+
+ if(remaining<=0){
+  logout();
+  return;
+ }
+
+ logoutTimer=setTimeout(()=>logout(),remaining);
+}
+
 async function login(){
  const email=val("email");
  const password=document.getElementById("password").value;
-
- if(!email||!password){
-  alert("Please enter email and password.");
-  return;
- }
 
  const {error}=await db.auth.signInWithPassword({email,password});
 
@@ -280,41 +230,47 @@ async function login(){
   return;
  }
 
+ sessionStorage.setItem("clinicLoginTime",String(Date.now()));
  await showApp();
 }
 
 async function showApp(){
+ startSessionTimer();
+
  document.getElementById("loginBox").classList.add("hidden");
  document.getElementById("app").classList.remove("hidden");
+
  await loadPatients();
  await loadAppointments();
+
  msg("Login successful");
 }
 
 async function logout(){
+ if(logoutTimer)clearTimeout(logoutTimer);
+ logoutTimer=null;
+
+ sessionStorage.removeItem("clinicLoginTime");
+
  await db.auth.signOut();
 
  document.getElementById("app").classList.add("hidden");
  document.getElementById("loginBox").classList.remove("hidden");
 
- document.getElementById("email").value="";
  document.getElementById("password").value="";
  document.getElementById("password").type="password";
- document.getElementById("passwordToggle").textContent="👁️";
+ document.getElementById("togglePasswordBtn").textContent="👁️";
 
  patients=[];
  appointments=[];
-
- document.getElementById("patientRows").replaceChildren();
- document.getElementById("appointmentRows").replaceChildren();
- document.getElementById("detailsBox").classList.add("hidden");
 
  cancelEdit();
  cancelAppointmentEdit();
 }
 
 async function loadPatients(){
- const {data,error}=await db.from("Patients").select("*").order("id",{ascending:false});
+ const {data,error}=await db.from("Patients")
+ .select("*").order("id",{ascending:false});
 
  if(error){
   msg("Load failed: "+error.message);
@@ -412,8 +368,7 @@ function cancelEdit(){
  [
  "full_name","phone","age","gender","registration_date",
  "chief_complaint","diagnosis","tooth_number","treatment",
- "prescription","next_appointment","medical_history","address",
- "dentalFiles"
+ "prescription","next_appointment","medical_history","address","dentalFiles"
  ].forEach(k=>setVal(k,""));
 
  document.getElementById("formTitle").textContent="Register New Patient";
@@ -484,12 +439,14 @@ async function savePatient(){
    const old=patients.find(p=>p.id===editingId);
    oldPaths=old?.dental_images||[];
 
-   const {error}=await db.from("Patients").update(patient).eq("id",editingId);
+   const {error}=await db.from("Patients")
+   .update(patient).eq("id",editingId);
 
    if(error)throw error;
 
   }else{
-   const {data,error}=await db.from("Patients").insert([patient]).select().single();
+   const {data,error}=await db.from("Patients")
+   .insert([patient]).select().single();
 
    if(error)throw error;
 
@@ -499,7 +456,9 @@ async function savePatient(){
   const paths=await uploadImages(patientId,oldPaths);
 
   if(paths.length){
-   const {error}=await db.from("Patients").update({dental_images:paths}).eq("id",patientId);
+   const {error}=await db.from("Patients")
+   .update({dental_images:paths}).eq("id",patientId);
+
    if(error)throw error;
   }
 
@@ -513,8 +472,11 @@ async function savePatient(){
  }
 }
 
+/* APPOINTMENT FUNCTIONS */
+
 async function loadAppointments(){
- const {data,error}=await db.from("appointments").select("*")
+ const {data,error}=await db.from("appointments")
+ .select("*")
  .order("appointment_date",{ascending:true})
  .order("appointment_time",{ascending:true});
 
@@ -539,6 +501,7 @@ function renderAppointments(){
 
  sorted.forEach(a=>{
   const patient=patients.find(p=>String(p.id)===String(a.patient_id));
+
   const tr=document.createElement("tr");
 
   const values=[
@@ -606,7 +569,9 @@ async function saveAppointment(){
   let result;
 
   if(editingAppointmentId!==null){
-   result=await db.from("appointments").update(appointment).eq("id",editingAppointmentId);
+   result=await db.from("appointments")
+   .update(appointment).eq("id",editingAppointmentId);
+
   }else{
    appointment.id=Date.now();
    result=await db.from("appointments").insert([appointment]);
@@ -614,7 +579,11 @@ async function saveAppointment(){
 
   if(result.error)throw result.error;
 
-  appointmentMsg(editingAppointmentId!==null?"Appointment updated successfully":"Appointment saved successfully");
+  appointmentMsg(
+   editingAppointmentId!==null?
+   "Appointment updated successfully":
+   "Appointment saved successfully"
+  );
 
   cancelAppointmentEdit();
   await loadAppointments();
@@ -687,24 +656,17 @@ async function showDetails(p){
  imageBox.replaceChildren();
 
  const fields=[
- ["Name","full_name"],
- ["Phone","phone"],
- ["Age","age"],
- ["Gender","gender"],
- ["Registration Date","registration_date"],
- ["Chief Complaint","chief_complaint"],
- ["Diagnosis","diagnosis"],
- ["Tooth Number","tooth_number"],
- ["Treatment","treatment"],
- ["Prescription","prescription"],
- ["Next Appointment","next_appointment"],
- ["Medical History","medical_history"],
- ["Address","address"]
+ ["Name","full_name"],["Phone","phone"],["Age","age"],["Gender","gender"],
+ ["Registration Date","registration_date"],["Chief Complaint","chief_complaint"],
+ ["Diagnosis","diagnosis"],["Tooth Number","tooth_number"],["Treatment","treatment"],
+ ["Prescription","prescription"],["Next Appointment","next_appointment"],
+ ["Medical History","medical_history"],["Address","address"]
  ];
 
  fields.forEach(([label,key])=>{
   const para=document.createElement("p");
   const strong=document.createElement("strong");
+
   strong.textContent=label+": ";
   para.append(strong,document.createTextNode(p[key]??""));
   content.appendChild(para);
@@ -720,7 +682,8 @@ async function showDetails(p){
  }
 
  for(const path of paths){
-  const {data,error}=await db.storage.from("patient-images").createSignedUrl(path,300);
+  const {data,error}=await db.storage.from("patient-images")
+  .createSignedUrl(path,300);
 
   if(error){
    const para=document.createElement("p");
@@ -764,11 +727,14 @@ async function deletePatient(id){
  await loadPatients();
 }
 
-/* Every new page load requires login */
-window.addEventListener("DOMContentLoaded",()=>{
- document.getElementById("loginBox").classList.remove("hidden");
- document.getElementById("app").classList.add("hidden");
-});
-</script>
-</body>
-</html>
+async function checkLogin(){
+ const {data:{session},error}=await db.auth.getSession();
+
+ if(error){
+  document.getElementById("loginBox").classList.remove("hidden");
+  document.getElementById("app").classList.add("hidden");
+  return;
+ }
+
+ if(session){
+  await showApp()
