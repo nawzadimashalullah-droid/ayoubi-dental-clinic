@@ -1,31 +1,3 @@
-nawzadimashalullah-droid
-ayoubi-dental-clinic
-Repository navigation
-Code
-Issues
-Pull requests
-Actions
-Projects
-Wiki
-Security and quality
-Insights
-Settings
-ayoubi-dental-clinic
-/index.html
-Go to file
-t
-T
-nawzadimashalullah-droid
-nawzadimashalullah-droid
-Update index.html
-6dc1773
- · 
-14 minutes ago
-
-Code
-
-Blame
-900 lines (836 loc) · 49.1 KB
 
 <!DOCTYPE html>
 <html lang="en">
@@ -105,12 +77,6 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <h2 id="dashboardTitle">Dashboard</h2>
 <p id="welcomeText">Welcome to Ayoubi Dental Clinic</p>
 
-<div class="stat-grid" style="margin:15px 0">
- <div class="stat">Total Patients<strong id="dashPatients">0</strong></div>
- <div class="stat">Today's Appointments<strong id="dashAppointments">0</strong></div>
- <div class="stat">Total Payments<strong id="dashPayments">AFN 0.00</strong></div>
- <div class="stat">Remaining Balance<strong id="dashBalance">AFN 0.00</strong></div>
-</div>
 <p id="dashboardMessage" class="message"></p>
 
 <div class="menu-grid">
@@ -342,7 +308,6 @@ function showSection(id){
  if(id==="paymentSection")populatePaymentPatients();
  if(id==="appointmentSection")populateAppointmentPatients();
  if(id==="settingsSection")fillSettingsForm();
- if(id==="dashboardSection")updateDashboard();
 }
 
 function initializeSupabase(){
@@ -398,7 +363,6 @@ async function showApp(){
  $("detailsBox").classList.add("hidden");
  await loadPatients();
  await loadAppointments();
- await updateDashboard();
  showMessage("Login successful");
 }
 
@@ -425,40 +389,9 @@ async function logout(){
  cancelEdit();cancelAppointmentEdit();isLoggingOut=false;
 }
 
-/* DASHBOARD */
+/* DASHBOARD - STATISTICS REMOVED */
 async function updateDashboard(){
- if(!db)return;
- $("dashPatients").textContent=patients.length;
- const today=localDate();
- const todayCount=appointments.filter(a=>a.appointment_date===today).length;
- $("dashAppointments").textContent=todayCount;
-
- try{
-  const {data,error}=await db.from("patient_payments")
-   .select("patient_id,total_fee,amount_paid")
-   .order("created_at",{ascending:true});
-  if(error)throw error;
-
-  const accounts={};
-  let totalPaid=0;
-
-  (data||[]).forEach(r=>{
-   const id=String(r.patient_id);
-   if(!accounts[id])accounts[id]={fee:0,paid:0};
-   accounts[id].fee=Number(r.total_fee||0);
-   accounts[id].paid+=Number(r.amount_paid||0);
-   totalPaid+=Number(r.amount_paid||0);
-  });
-
-  let remaining=0;
-  Object.values(accounts).forEach(a=>remaining+=a.fee-a.paid);
-
-  $("dashPayments").textContent=money(totalPaid);
-  $("dashBalance").textContent=money(remaining);
-  $("dashboardMessage").textContent="";
- }catch(e){
-  $("dashboardMessage").textContent="Dashboard payment loading error: "+e.message;
- }
+ return;
 }
 
 /* SETTINGS */
@@ -504,7 +437,6 @@ async function saveSettings(){
   clinicSettings=settings;applySettings();fillSettingsForm();
   $("settingsMessage").textContent="Settings saved successfully.";
   if(logoutTimer)startSessionTimer();
-  await updateDashboard();
  }catch(e){$("settingsMessage").textContent="Settings save error: "+e.message}
  finally{$("saveSettingsButton").disabled=false}
 }
@@ -650,7 +582,7 @@ async function restoreBackup(){
   if(backup.patient_payments.length){const {error}=await db.from("patient_payments").upsert(backup.patient_payments,{onConflict:"id"});if(error)throw new Error("Payments: "+error.message)}
   $("restoreMessage").textContent="Restoring clinic settings...";
   if(backup.clinic_settings){const {error}=await db.from("clinic_settings").upsert(backup.clinic_settings,{onConflict:"id"});if(error)throw new Error("Settings: "+error.message)}
-  await loadSettings();await loadPatients();await loadAppointments();await updateDashboard();
+  await loadSettings();await loadPatients();await loadAppointments();
   $("restoreMessage").textContent="Backup records restored. Check your records and make sure everything is correct.";
   $("restorePreview").classList.add("hidden");$("restoreFile").value="";selectedRestoreBackup=null;
  }catch(e){
@@ -663,7 +595,6 @@ async function loadPatients(){
  const {data,error}=await db.from("Patients").select("*").order("id",{ascending:false});
  if(error){showMessage("Patients loading error: "+error.message);return}
  patients=data||[];renderPatients();populateAppointmentPatients();populatePaymentPatients();
- $("dashPatients").textContent=patients.length;
 }
 
 function populateAppointmentPatients(){
@@ -758,7 +689,7 @@ async function savePatient(){
   const paths=await uploadImages(id,oldPaths);
   if(paths.length){const {error}=await db.from("Patients").update({dental_images:paths}).eq("id",id);if(error)throw error}
   showMessage(editingId!==null?"Patient updated successfully.":"Patient saved successfully.");
-  cancelEdit();await loadPatients();await updateDashboard();showSection("dashboardSection");
+  cancelEdit();await loadPatients();showSection("dashboardSection");
  }catch(e){showMessage("Save error: "+e.message);alert("Save error: "+e.message)}
  finally{$("savePatientButton").disabled=false}
 }
@@ -767,7 +698,7 @@ async function deletePatient(id){
  if(!confirm("Are you sure you want to delete this patient?"))return;
  const {error}=await db.from("Patients").delete().eq("id",id);
  if(error){showMessage("Delete error: "+error.message);return}
- showMessage("Patient deleted.");await loadPatients();await loadAppointments();await updateDashboard();
+ showMessage("Patient deleted.");await loadPatients();await loadAppointments();
 }
 
 function addDetail(parent,label,v){
@@ -822,7 +753,6 @@ async function loadAppointments(){
  const {data,error}=await db.from("appointments").select("*").order("appointment_date",{ascending:true});
  if(error){appointmentMessage("Appointments loading error: "+error.message);return}
  appointments=data||[];renderAppointments();
- $("dashAppointments").textContent=appointments.filter(a=>a.appointment_date===localDate()).length;
 }
 function patientForAppointment(id){return patients.find(p=>String(p.id)===String(id))}
 function renderAppointments(){
@@ -855,7 +785,7 @@ async function saveAppointment(){
    const {error}=await db.from("appointments").insert([record]);if(error)throw error;
    appointmentMessage("Appointment saved successfully.");
   }
-  cancelAppointmentEdit();await loadAppointments();await updateDashboard();
+  cancelAppointmentEdit();await loadAppointments();
  }catch(e){appointmentMessage("Appointment error: "+e.message)}
  finally{$("saveAppointmentButton").disabled=false}
 }
@@ -876,7 +806,7 @@ async function deleteAppointment(id){
  if(!confirm("Are you sure you want to delete this appointment?"))return;
  const {error}=await db.from("appointments").delete().eq("id",id);
  if(error){appointmentMessage("Delete error: "+error.message);return}
- appointmentMessage("Appointment deleted.");await loadAppointments();await updateDashboard();
+ appointmentMessage("Appointment deleted.");await loadAppointments();
 }
 function clearAppointmentFilter(){$("appointmentFilterDate").value="";renderAppointments()}
 
@@ -915,7 +845,6 @@ async function savePayment(){
   }]);
   if(error)throw error;
   await loadPatientAccount();
-  await updateDashboard();
   $("paymentMessage").textContent="Payment saved successfully.";
  }catch(e){$("paymentMessage").textContent="Payment error: "+e.message}
  finally{$("savePaymentButton").disabled=false}
