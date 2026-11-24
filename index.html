@@ -848,4 +848,49 @@ function editAppointment(a){
  editingAppointmentId=a.id;
 
  setValue("appointment_patient",a.patient_id);
- setValue("appointment_date",a.appointmen
+ 
+setValue("appointment_date",a.appointment_date);
+setValue("appointment_time",a.appointment_time);
+setValue("appointment_reason",a.reason);
+setValue("appointment_status",a.status);
+setValue("appointment_notes",a.notes);
+
+$("appointmentTitle").textContent="Edit Appointment";
+$("saveAppointmentButton").textContent="Update Appointment";
+$("cancelAppointmentButton").classList.remove("hidden");
+$("appointmentTitle").scrollIntoView({behavior:"smooth"});
+}
+
+function cancelAppointmentEdit(){
+ editingAppointmentId=null;
+ setValue("appointment_patient","");
+ setValue("appointment_date","");
+ setValue("appointment_time","");
+ setValue("appointment_reason","");
+ setValue("appointment_status","Scheduled");
+ setValue("appointment_notes","");
+ $("appointmentTitle").textContent="Appointment Management";
+ $("saveAppointmentButton").textContent="Save Appointment";
+ $("cancelAppointmentButton").classList.add("hidden");
+}
+
+async function deleteAppointment(id){
+ if(!confirm("Are you sure you want to delete this appointment?"))return;
+ const {error}=await db.from("appointments").delete().eq("id",id);
+ if(error){
+  appointmentMessage("Delete error: "+error.message);
+  return;
+ }
+ appointmentMessage("Appointment deleted.");
+ await loadAppointments();
+}
+
+function clearAppointmentFilter(){
+ $("appointmentFilterDate").value="";
+ renderAppointments();
+}
+
+checkLogin();
+</script>
+</body>
+</html>
