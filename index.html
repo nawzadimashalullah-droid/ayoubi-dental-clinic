@@ -43,6 +43,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 .settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .settings-item{border:1px solid var(--border);padding:12px;border-radius:10px}
 #clinicLogo{max-width:120px;max-height:100px;object-fit:contain;display:block;margin:8px 0}
+.restore-info{background:var(--light);padding:12px;border-radius:8px;margin:10px 0;overflow-wrap:anywhere}
 @media(max-width:600px){
  body{padding:8px}.card{padding:12px}header{padding:18px 8px}
  button{padding:9px 11px}.menu-grid{grid-template-columns:1fr 1fr}
@@ -112,8 +113,8 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2 id="appointmentTitle">Appointment Management</h2>
 <label>Select Patient</label><select id="appointment_patient"><option value="">Select a patient</option></select>
-<label>Appointment Date</label><input id="appointment_date" type="date">
-<label>Appointment Time</label><input id="appointment_time" type="time">
+<label>Appointment Date</label><input type="date" id="appointment_date">
+<label>Appointment Time</label><input type="time" id="appointment_time">
 <label>Reason</label><textarea id="appointment_reason"></textarea>
 <label>Status</label>
 <select id="appointment_status"><option>Scheduled</option><option>Completed</option><option>Cancelled</option></select>
@@ -177,7 +178,6 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <button type="button" class="secondary" onclick="closeDetails()">Close</button>
 </section>
 
-<!-- SETTINGS -->
 <section class="card page-section hidden" id="settingsSection">
 <button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2 data-i18n="settings">Settings</h2>
@@ -248,10 +248,21 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 
 <div class="settings-item">
 <h3>8. Backup & Restore</h3>
-<p>د ناروغانو، ملاقاتونو، پیسو او Settings معلومات په JSON فایل کې ښکته کړه.</p>
+<p>د کلینیک معلومات په JSON فایل کې ښکته کړه یا له پخواني Backup څخه یې بېرته راواخله.</p>
 <button type="button" onclick="exportBackup()">Download Backup</button>
 <p id="backupMessage" class="message"></p>
-<p>دا Backup ستا په موبایل کې ښکته کېږي. اتومات Cloud Backup نه دی. د Restore لپاره د معلوماتو د جوړښت او ID ګانو د ساتنې جلا خوندي پروسه اړینه ده.</p>
+<hr>
+<h3>Restore Backup</h3>
+<label>Select Backup File (JSON)</label>
+<input type="file" id="restoreFile" accept=".json,application/json">
+<button type="button" id="previewRestoreButton" onclick="previewRestore()">Preview Backup</button>
+<div id="restorePreview" class="hidden restore-info">
+<p id="restorePreviewText" class="message"></p>
+<p>معلومات وګوره. که سم وي، د Restore تڼۍ کېکاږه.</p>
+<button type="button" class="danger" id="restoreButton" onclick="restoreBackup()">Confirm & Restore Backup</button>
+</div>
+<p id="restoreMessage" class="message"></p>
+<p>یادونه: Restore د ورته ID لرونکي ریکارډونه نوي کوي او نور ریکارډونه نه حذف کوي. د ناروغانو د عکسونو اصلي فایلونه په Backup کې نه شاملېږي.</p>
 </div>
 
 <div class="settings-item">
@@ -281,6 +292,7 @@ let clinicSettings={
  clinicName:"Ayoubi Dental Clinic",phone:"",address:"",logo:"",
  language:"en",currency:"AFN",theme:"pink",timeout:60
 };
+let selectedRestoreBackup=null;
 
 const $=id=>document.getElementById(id);
 const value=id=>$(id).value.trim();
@@ -488,6 +500,7 @@ async function changePassword(){
  }catch(e){$("passwordChangeMessage").textContent="Password change error: "+e.message}
 }
 
+/* BACKUP EXPORT */
 async function exportBackup(){
  $("backupMessage").textContent="Preparing backup...";
  try{
@@ -508,9 +521,162 @@ async function exportBackup(){
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob),link=document.createElement("a");
   link.href=url;link.download="Ayoubi-Clinic-Backup-"+new Date().toISOString().slice(0,10)+".json";
-  document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
   $("backupMessage").textContent="Backup downloaded successfully.";
  }catch(e){$("backupMessage").textContent="Backup error: "+e.message}
+}
+
+/* RESTORE BACKUP */
+async function previewRestore(){
+ const file=$("restoreFile").files[0];
+ $("restorePreview").classList.add("hidden");
+ $("restoreMessage").textContent="";
+ selectedRestoreBackup=null;
+
+ if(!file){
+  $("restoreMessage").textContent="Please select a backup file.";
+  return;
+ }
+
+ if(file.size>50*1024*1024){
+  $("restoreMessage").textContent="Backup file is too large (maximum 50 MB).";
+  return;
+ }
+
+ try{
+  const backup=JSON.parse(await file.text());
+
+  if(backup.application!=="Ayoubi Dental Clinic"){
+   throw new Error("This is not an Ayoubi Dental Clinic backup file.");
+  }
+
+  if(!Array.isArray(backup.patients)||
+     !Array.isArray(backup.appointments)||
+     !Array.isArray(backup.patient_payments)){
+   throw new Error("Backup file structure is invalid.");
+  }
+
+  const patientIds=new Set();
+
+  for(const p of backup.patients){
+   if(p.id===undefined||p.id===null)throw new Error("A patient record has no ID.");
+   patientIds.add(String(p.id));
+  }
+
+  for(const a of backup.appointments){
+   if(a.patient_id===undefined||a.patient_id===null||
+      !patientIds.has(String(a.patient_id))){
+    throw new Error("An appointment has an invalid patient ID.");
+   }
+   if(a.id===undefined||a.id===null)throw new Error("An appointment has no ID.");
+  }
+
+  for(const p of backup.patient_payments){
+   if(p.patient_id===undefined||p.patient_id===null||
+      !patientIds.has(String(p.patient_id))){
+    throw new Error("A payment has an invalid patient ID.");
+   }
+   if(p.id===undefined||p.id===null)throw new Error("A payment has no ID.");
+  }
+
+  if(backup.clinic_settings!==null&&backup.clinic_settings!==undefined){
+   if(typeof backup.clinic_settings!=="object"||
+      backup.clinic_settings.id!==1){
+    throw new Error("Clinic settings data is invalid.");
+   }
+  }
+
+  selectedRestoreBackup=backup;
+
+  $("restorePreviewText").textContent=
+   "Backup Date: "+(backup.backupDate||"Unknown")+
+   " | Patients: "+backup.patients.length+
+   " | Appointments: "+backup.appointments.length+
+   " | Payments: "+backup.patient_payments.length+
+   " | Clinic Settings: "+(backup.clinic_settings?"Included":"Not included");
+
+  $("restorePreview").classList.remove("hidden");
+  $("restoreMessage").textContent="Backup file is valid. Review the information before restoring.";
+
+ }catch(e){
+  $("restoreMessage").textContent="Backup file error: "+e.message;
+ }
+}
+
+async function restoreBackup(){
+ if(!selectedRestoreBackup){
+  $("restoreMessage").textContent="Please preview a backup file first.";
+  return;
+ }
+
+ const backup=selectedRestoreBackup;
+
+ const confirmed=confirm(
+  "Restore this backup now?\n\n"+
+  "Records with matching IDs may be updated. "+
+  "Other records will remain. Make a fresh backup before continuing."
+ );
+
+ if(!confirmed)return;
+
+ const restoreButton=$("restoreButton");
+ const previewButton=$("previewRestoreButton");
+ restoreButton.disabled=true;
+ previewButton.disabled=true;
+
+ try{
+  $("restoreMessage").textContent="Restoring patients...";
+
+  if(backup.patients.length){
+   const {error}=await db.from("Patients")
+    .upsert(backup.patients,{onConflict:"id"});
+   if(error)throw new Error("Patients: "+error.message);
+  }
+
+  $("restoreMessage").textContent="Restoring appointments...";
+
+  if(backup.appointments.length){
+   const {error}=await db.from("appointments")
+    .upsert(backup.appointments,{onConflict:"id"});
+   if(error)throw new Error("Appointments: "+error.message);
+  }
+
+  $("restoreMessage").textContent="Restoring payments...";
+
+  if(backup.patient_payments.length){
+   const {error}=await db.from("patient_payments")
+    .upsert(backup.patient_payments,{onConflict:"id"});
+   if(error)throw new Error("Payments: "+error.message);
+  }
+
+  $("restoreMessage").textContent="Restoring clinic settings...";
+
+  if(backup.clinic_settings){
+   const {error}=await db.from("clinic_settings")
+    .upsert(backup.clinic_settings,{onConflict:"id"});
+   if(error)throw new Error("Settings: "+error.message);
+  }
+
+  await loadSettings();
+  await loadPatients();
+  await loadAppointments();
+
+  $("restoreMessage").textContent=
+   "Backup records restored. Check your records and make sure everything is correct.";
+
+  $("restorePreview").classList.add("hidden");
+  $("restoreFile").value="";
+  selectedRestoreBackup=null;
+
+ }catch(e){
+  $("restoreMessage").textContent=
+   "Restore error: "+e.message+
+   " Some records may already have been restored. Check your data before retrying.";
+ }finally{
+  restoreButton.disabled=false;
+  previewButton.disabled=false;
+ }
 }
 
 /* PATIENTS */
