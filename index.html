@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ps">
 <head>
@@ -12,7 +13,9 @@ header{background:#087e8b;color:white;padding:20px;text-align:center;border-radi
 .card{background:white;padding:16px;border-radius:12px;margin:14px 0;box-shadow:0 2px 8px #ddd}
 input,select,textarea{width:100%;box-sizing:border-box;padding:11px;margin:6px 0 12px;border:1px solid #ccc;border-radius:7px}
 button{padding:10px 14px;background:#087e8b;color:white;border:0;border-radius:7px;margin:3px;cursor:pointer}
-.danger{background:#c62828}.secondary{background:#64748b}.success{background:#2e7d32}
+.danger{background:#c62828}
+.secondary{background:#64748b}
+.success{background:#2e7d32}
 table{width:100%;border-collapse:collapse;min-width:650px}
 td,th{border:1px solid #ddd;padding:8px;text-align:left}
 th{background:#e0f2f1}
@@ -21,10 +24,12 @@ th{background:#e0f2f1}
 #message{font-weight:bold}
 img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 .status{font-weight:bold}
+.image-link{display:block;margin:10px 0;color:#087e8b;font-weight:bold}
 </style>
 </head>
 <body>
 <div class="container">
+
 <header>
 <h1>Ayoubi Dental Clinic</h1>
 <p>Patient Management System</p>
@@ -40,6 +45,7 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 </div>
 
 <div id="app" class="hidden">
+
 <div class="card">
 <h2>Dashboard</h2>
 <button onclick="logout()">Logout</button>
@@ -48,64 +54,87 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 
 <div class="card">
 <h2 id="formTitle">Register New Patient</h2>
+
 <label>Patient Full Name</label>
 <input id="full_name" placeholder="Full Name">
+
 <label>Phone Number</label>
 <input id="phone" placeholder="Phone Number">
+
 <label>Age</label>
 <input id="age" type="number" placeholder="Age">
+
 <label>Gender</label>
 <select id="gender">
 <option value="">Select Gender</option>
 <option>Male</option>
 <option>Female</option>
 </select>
+
 <label>Registration Date</label>
 <input id="registration_date" type="date">
+
 <label>Chief Complaint</label>
 <textarea id="chief_complaint"></textarea>
+
 <label>Diagnosis</label>
 <textarea id="diagnosis" placeholder="Diagnosis"></textarea>
+
 <label>Tooth Number</label>
 <input id="tooth_number" placeholder="Example: 11, 16, 36">
+
 <label>Treatment Performed</label>
 <textarea id="treatment" placeholder="Treatment"></textarea>
+
 <label>Prescription and Medication</label>
 <textarea id="prescription" placeholder="Medicine and dosage"></textarea>
+
 <label>Next Appointment Date</label>
 <input id="next_appointment" type="date">
+
 <label>Medical History</label>
 <textarea id="medical_history"></textarea>
+
 <label>Address</label>
 <textarea id="address"></textarea>
+
 <label>Dental Photos and X-rays</label>
 <input id="dentalFiles" type="file" accept="image/*" multiple>
 <p>Choose dental photos or X-ray images.</p>
+
 <button onclick="savePatient()" id="saveButton">Save Patient</button>
 <button onclick="cancelEdit()" id="cancelButton" class="secondary hidden">Cancel Edit</button>
 </div>
 
 <!-- APPOINTMENTS -->
+
 <div class="card" id="appointmentsCard">
 <h2 id="appointmentFormTitle">Appointment Management</h2>
+
 <label>Select Patient</label>
 <select id="appointment_patient">
 <option value="">Select a patient</option>
 </select>
+
 <label>Appointment Date</label>
 <input id="appointment_date" type="date">
+
 <label>Appointment Time</label>
 <input id="appointment_time" type="time">
+
 <label>Reason for Appointment</label>
 <textarea id="appointment_reason" placeholder="Reason / Treatment"></textarea>
+
 <label>Status</label>
 <select id="appointment_status">
 <option value="Scheduled">Scheduled</option>
 <option value="Completed">Completed</option>
 <option value="Cancelled">Cancelled</option>
 </select>
+
 <label>Notes</label>
 <textarea id="appointment_notes" placeholder="Additional notes"></textarea>
+
 <button onclick="saveAppointment()" id="appointmentSaveButton">Save Appointment</button>
 <button onclick="cancelAppointmentEdit()" id="appointmentCancelButton" class="secondary hidden">Cancel Edit</button>
 <p id="appointmentMessage"></p>
@@ -113,9 +142,12 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 
 <div class="card">
 <h2>Appointments List</h2>
+
 <label>Filter by date</label>
 <input id="appointmentFilterDate" type="date" onchange="renderAppointments()">
+
 <button class="secondary" onclick="clearAppointmentFilter()">Show All</button>
+
 <div class="table-wrap">
 <table>
 <thead>
@@ -137,10 +169,16 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 <div class="card">
 <h2>Patient Records</h2>
 <input id="search" placeholder="Search name or phone" oninput="renderPatients()">
+
 <div class="table-wrap">
 <table>
 <thead>
-<tr><th>Name</th><th>Phone</th><th>Age</th><th>Actions</th></tr>
+<tr>
+<th>Name</th>
+<th>Phone</th>
+<th>Age</th>
+<th>Actions</th>
+</tr>
 </thead>
 <tbody id="patientRows"></tbody>
 </table>
@@ -154,12 +192,14 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 <div id="imageContent"></div>
 <button onclick="document.getElementById('detailsBox').classList.add('hidden')">Close</button>
 </div>
+
 </div>
 </div>
 
 <script>
 const SUPABASE_URL="https://qrmgjgzgvbisuhqimqmd.supabase.co";
 const SUPABASE_KEY="sb_publishable_-VKLHhcBBx6DuKNokUkMLQ_wWWBchyh";
+
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
 let patients=[];
@@ -183,36 +223,66 @@ function setVal(id,v){
  document.getElementById(id).value=v??"";
 }
 
+/* LOGIN */
+
 async function login(){
  const email=val("email");
  const password=document.getElementById("password").value;
- const {error}=await db.auth.signInWithPassword({email,password});
- if(error){alert(error.message);return;}
+
+ const {error}=await db.auth.signInWithPassword({
+  email,
+  password
+ });
+
+ if(error){
+  alert(error.message);
+  return;
+ }
+
  await showApp();
 }
 
 async function showApp(){
  document.getElementById("loginBox").classList.add("hidden");
  document.getElementById("app").classList.remove("hidden");
+
  await loadPatients();
  await loadAppointments();
+
  msg("Login successful");
 }
 
 async function logout(){
  await db.auth.signOut();
+
  document.getElementById("app").classList.add("hidden");
  document.getElementById("loginBox").classList.remove("hidden");
+
  patients=[];
  appointments=[];
+
+ document.getElementById("patientRows").replaceChildren();
+ document.getElementById("appointmentRows").replaceChildren();
+ document.getElementById("detailsBox").classList.add("hidden");
+
  cancelEdit();
  cancelAppointmentEdit();
 }
 
+/* PATIENTS */
+
 async function loadPatients(){
- const {data,error}=await db.from("Patients").select("*").order("id",{ascending:false});
- if(error){msg("Load failed: "+error.message);return;}
+ const {data,error}=await db.from("Patients")
+  .select("*")
+  .order("id",{ascending:false});
+
+ if(error){
+  msg("Load failed: "+error.message);
+  return;
+ }
+
  patients=data||[];
+
  renderPatients();
  populateAppointmentPatients();
 }
@@ -220,6 +290,7 @@ async function loadPatients(){
 function populateAppointmentPatients(){
  const select=document.getElementById("appointment_patient");
  const current=select.value;
+
  select.replaceChildren();
 
  const first=document.createElement("option");
@@ -242,12 +313,14 @@ function populateAppointmentPatients(){
 function renderPatients(){
  const search=val("search").toLowerCase();
  const body=document.getElementById("patientRows");
+
  body.replaceChildren();
 
  patients.filter(p=>
   String(p.full_name||"").toLowerCase().includes(search)||
   String(p.phone||"").toLowerCase().includes(search)
  ).forEach(p=>{
+
   const tr=document.createElement("tr");
 
   [p.full_name,p.phone,p.age].forEach(v=>{
@@ -309,6 +382,8 @@ function cancelEdit(){
  document.getElementById("cancelButton").classList.add("hidden");
 }
 
+/* IMAGE UPLOAD */
+
 async function uploadImages(patientId,oldPaths){
  const files=Array.from(document.getElementById("dentalFiles").files||[]);
 
@@ -316,11 +391,14 @@ async function uploadImages(patientId,oldPaths){
 
  const {data:{user},error:userError}=await db.auth.getUser();
 
- if(userError||!user)throw new Error("Please login again.");
+ if(userError||!user){
+  throw new Error("Please login again.");
+ }
 
  const paths=[...(oldPaths||[])];
 
  for(const file of files){
+
   if(!file.type.startsWith("image/"))continue;
 
   if(file.size>10*1024*1024){
@@ -330,7 +408,9 @@ async function uploadImages(patientId,oldPaths){
   const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
   const path=user.id+"/"+patientId+"/"+Date.now()+"-"+safeName;
 
-  const {error}=await db.storage.from("patient-images").upload(path,file);
+  const {error}=await db.storage
+   .from("patient-images")
+   .upload(path,file);
 
   if(error)throw error;
 
@@ -339,6 +419,8 @@ async function uploadImages(patientId,oldPaths){
 
  return paths;
 }
+
+/* SAVE PATIENT */
 
 async function savePatient(){
  const full_name=val("full_name");
@@ -369,14 +451,22 @@ async function savePatient(){
   let oldPaths=[];
 
   if(editingId!==null){
+
    const old=patients.find(p=>p.id===editingId);
    oldPaths=old?.dental_images||[];
 
-   const {error}=await db.from("Patients").update(patient).eq("id",editingId);
+   const {error}=await db.from("Patients")
+    .update(patient)
+    .eq("id",editingId);
 
    if(error)throw error;
+
   }else{
-   const {data,error}=await db.from("Patients").insert([patient]).select().single();
+
+   const {data,error}=await db.from("Patients")
+    .insert([patient])
+    .select()
+    .single();
 
    if(error)throw error;
 
@@ -386,12 +476,17 @@ async function savePatient(){
   const paths=await uploadImages(patientId,oldPaths);
 
   if(paths.length){
-   const {error}=await db.from("Patients").update({dental_images:paths}).eq("id",patientId);
+   const {error}=await db.from("Patients")
+    .update({dental_images:paths})
+    .eq("id",patientId);
 
    if(error)throw error;
   }
 
-  msg(editingId!==null?"Patient updated successfully":"Patient saved successfully");
+  msg(editingId!==null
+   ?"Patient updated successfully"
+   :"Patient saved successfully"
+  );
 
   cancelEdit();
   await loadPatients();
@@ -401,7 +496,7 @@ async function savePatient(){
  }
 }
 
-/* APPOINTMENT FUNCTIONS */
+/* APPOINTMENTS */
 
 async function loadAppointments(){
  const {data,error}=await db.from("appointments")
@@ -500,13 +595,17 @@ async function saveAppointment(){
   let result;
 
   if(editingAppointmentId!==null){
+
    result=await db.from("appointments")
     .update(appointment)
     .eq("id",editingAppointmentId);
+
   }else{
+
    appointment.id=Date.now();
 
-   result=await db.from("appointments").insert([appointment]);
+   result=await db.from("appointments")
+    .insert([appointment]);
   }
 
   if(result.error)throw result.error;
@@ -565,7 +664,9 @@ function clearAppointmentFilter(){
 async function deleteAppointment(id){
  if(!confirm("Are you sure you want to delete this appointment?"))return;
 
- const {error}=await db.from("appointments").delete().eq("id",id);
+ const {error}=await db.from("appointments")
+  .delete()
+  .eq("id",id);
 
  if(error){
   appointmentMsg("Appointment delete failed: "+error.message);
@@ -578,6 +679,8 @@ async function deleteAppointment(id){
 
  await loadAppointments();
 }
+
+/* PATIENT DETAILS AND FULL-SIZE IMAGES */
 
 async function showDetails(p){
  const box=document.getElementById("detailsBox");
@@ -616,7 +719,10 @@ async function showDetails(p){
  }
 
  for(const path of paths){
-  const {data,error}=await db.storage.from("patient-images").createSignedUrl(path,300);
+
+  const {data,error}=await db.storage
+   .from("patient-images")
+   .createSignedUrl(path,3600);
 
   if(error){
    const para=document.createElement("p");
@@ -625,28 +731,44 @@ async function showDetails(p){
    continue;
   }
 
-  const link=document.createElement("a");
-  link.href=data.signedUrl;
-  link.target="_blank";
-  link.rel="noopener";
-  link.textContent="Open image / X-ray";
-  link.style.display="block";
-  link.style.margin="10px 0";
+  const url=data.signedUrl;
 
   const img=document.createElement("img");
-  img.src=data.signedUrl;
+  img.src=url;
   img.alt="Patient dental image";
+  img.style.cursor="pointer";
+  img.style.maxWidth="100%";
+  img.style.maxHeight="none";
+
+  // Click the image to open the full-size image
+  img.addEventListener("click",()=>{
+   window.open(url,"_blank","noopener");
+  });
+
+  const link=document.createElement("a");
+  link.href=url;
+  link.target="_blank";
+  link.rel="noopener noreferrer";
+  link.textContent="Open image / X-ray";
+  link.className="image-link";
 
   imageBox.append(img,link);
  }
 
- window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
+ window.scrollTo({
+  top:document.body.scrollHeight,
+  behavior:"smooth"
+ });
 }
+
+/* DELETE PATIENT */
 
 async function deletePatient(id){
  if(!confirm("Are you sure you want to delete this patient?"))return;
 
- const {error}=await db.from("Patients").delete().eq("id",id);
+ const {error}=await db.from("Patients")
+  .delete()
+  .eq("id",id);
 
  if(error){
   msg("Delete failed: "+error.message);
@@ -660,13 +782,18 @@ async function deletePatient(id){
  await loadPatients();
 }
 
+/* CHECK LOGIN */
+
 async function checkLogin(){
  const {data:{session}}=await db.auth.getSession();
 
- if(session)await showApp();
+ if(session){
+  await showApp();
+ }
 }
 
 checkLogin();
+
 </script>
 </body>
 </html>
