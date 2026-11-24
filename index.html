@@ -17,18 +17,16 @@ header{background:#087e8b;color:white;padding:20px;text-align:center;border-radi
 input,select,textarea{width:100%;box-sizing:border-box;padding:11px;margin:6px 0 12px;border:1px solid #ccc;border-radius:7px}
 .password-wrap{display:flex;gap:6px;align-items:center}
 .password-wrap input{flex:1;min-width:0}
-.password-wrap button{margin:6px 0 12px;white-space:nowrap}
+.password-wrap button{margin:6px 0 12px}
 button{padding:10px 14px;background:#087e8b;color:white;border:0;border-radius:7px;margin:3px;cursor:pointer}
-button:disabled{opacity:.6;cursor:not-allowed}
+button:disabled{opacity:.6}
 .danger{background:#c62828}
 .secondary{background:#64748b}
-.success{background:#2e7d32}
+.hidden{display:none!important}
 table{width:100%;border-collapse:collapse;min-width:650px}
 td,th{border:1px solid #ddd;padding:8px;text-align:left}
 th{background:#e0f2f1}
 .table-wrap{overflow-x:auto}
-.hidden{display:none!important}
-#message{font-weight:bold}
 img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 .status{font-weight:bold}
 </style>
@@ -52,10 +50,10 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 <label>Password</label>
 <div class="password-wrap">
 <input id="password" type="password" placeholder="Password" autocomplete="current-password">
-<button type="button" class="secondary" id="togglePasswordBtn" onclick="togglePassword()">👁️</button>
+<button type="button" class="secondary" id="togglePasswordBtn">👁️</button>
 </div>
 
-<button type="button" id="loginButton" onclick="login()">Login</button>
+<button type="button" id="loginButton">Login</button>
 <p id="loginMessage"></p>
 </div>
 
@@ -95,16 +93,16 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 <textarea id="chief_complaint"></textarea>
 
 <label>Diagnosis</label>
-<textarea id="diagnosis" placeholder="Diagnosis"></textarea>
+<textarea id="diagnosis"></textarea>
 
 <label>Tooth Number</label>
 <input id="tooth_number" placeholder="Example: 11, 16, 36">
 
 <label>Treatment Performed</label>
-<textarea id="treatment" placeholder="Treatment"></textarea>
+<textarea id="treatment"></textarea>
 
 <label>Prescription and Medication</label>
-<textarea id="prescription" placeholder="Medicine and dosage"></textarea>
+<textarea id="prescription"></textarea>
 
 <label>Next Appointment Date</label>
 <input id="next_appointment" type="date">
@@ -117,7 +115,6 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 
 <label>Dental Photos and X-rays</label>
 <input id="dentalFiles" type="file" accept="image/*" multiple>
-<p>Choose dental photos or X-ray images.</p>
 
 <button type="button" onclick="savePatient()" id="saveButton">Save Patient</button>
 <button type="button" onclick="cancelEdit()" id="cancelButton" class="secondary hidden">Cancel Edit</button>
@@ -139,7 +136,7 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 <input id="appointment_time" type="time">
 
 <label>Reason for Appointment</label>
-<textarea id="appointment_reason" placeholder="Reason / Treatment"></textarea>
+<textarea id="appointment_reason"></textarea>
 
 <label>Status</label>
 <select id="appointment_status">
@@ -149,7 +146,7 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 </select>
 
 <label>Notes</label>
-<textarea id="appointment_notes" placeholder="Additional notes"></textarea>
+<textarea id="appointment_notes"></textarea>
 
 <button type="button" onclick="saveAppointment()" id="appointmentSaveButton">Save Appointment</button>
 <button type="button" onclick="cancelAppointmentEdit()" id="appointmentCancelButton" class="secondary hidden">Cancel Edit</button>
@@ -163,7 +160,6 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 
 <label>Filter by date</label>
 <input id="appointmentFilterDate" type="date" onchange="renderAppointments()">
-
 <button type="button" class="secondary" onclick="clearAppointmentFilter()">Show All</button>
 
 <div class="table-wrap">
@@ -187,7 +183,6 @@ img{max-width:150px;max-height:150px;margin:6px;border-radius:7px}
 <!-- PATIENT RECORDS -->
 <div class="card">
 <h2>Patient Records</h2>
-
 <input id="search" placeholder="Search name or phone" oninput="renderPatients()">
 
 <div class="table-wrap">
@@ -269,17 +264,20 @@ function togglePassword(){
  const password=document.getElementById("password");
  const button=document.getElementById("togglePasswordBtn");
 
- const visible=password.type==="password";
-
- password.type=visible?"text":"password";
- button.textContent=visible?"🙈":"👁️";
+ if(password.type==="password"){
+  password.type="text";
+  button.textContent="🙈";
+ }else{
+  password.type="password";
+  button.textContent="👁️";
+ }
 }
 
-/* SESSION TIMER: ONE HOUR */
+document.getElementById("togglePasswordBtn").addEventListener("click",togglePassword);
+
+/* SESSION TIMER */
 function startSessionTimer(){
- if(logoutTimer){
-  clearTimeout(logoutTimer);
- }
+ if(logoutTimer) clearTimeout(logoutTimer);
 
  let startedAt=Number(sessionStorage.getItem("clinicLoginTime"));
 
@@ -295,9 +293,7 @@ function startSessionTimer(){
   return;
  }
 
- logoutTimer=setTimeout(()=>{
-  logout();
- },remaining);
+ logoutTimer=setTimeout(()=>logout(),remaining);
 }
 
 /* LOGIN */
@@ -306,14 +302,14 @@ async function login(){
  const loginMessage=document.getElementById("loginMessage");
 
  if(!db){
-  loginMessage.textContent="Supabase could not load. Please refresh the page and try again.";
+  loginMessage.textContent="Supabase could not load. Please refresh the page.";
   return;
  }
 
  const email=val("email");
  const password=document.getElementById("password").value;
 
- if(!email || !password){
+ if(!email||!password){
   loginMessage.textContent="Please enter email and password.";
   return;
  }
@@ -323,10 +319,7 @@ async function login(){
  loginMessage.textContent="";
 
  try{
-  const {error}=await db.auth.signInWithPassword({
-   email:email,
-   password:password
-  });
+  const {error}=await db.auth.signInWithPassword({email,password});
 
   if(error){
    loginMessage.textContent=error.message;
@@ -334,7 +327,6 @@ async function login(){
   }
 
   sessionStorage.setItem("clinicLoginTime",String(Date.now()));
-
   await showApp();
 
  }catch(error){
@@ -344,6 +336,8 @@ async function login(){
   button.textContent="Login";
  }
 }
+
+document.getElementById("loginButton").addEventListener("click",login);
 
 /* SHOW DASHBOARD */
 async function showApp(){
@@ -363,17 +357,13 @@ async function logout(){
  if(isLoggingOut)return;
  isLoggingOut=true;
 
- if(logoutTimer){
-  clearTimeout(logoutTimer);
- }
-
+ if(logoutTimer) clearTimeout(logoutTimer);
  logoutTimer=null;
+
  sessionStorage.removeItem("clinicLoginTime");
 
  try{
-  if(db){
-   await db.auth.signOut();
-  }
+  if(db) await db.auth.signOut();
  }catch(error){
   console.log(error);
  }
@@ -408,12 +398,11 @@ async function loadPatients(){
  }
 
  patients=data||[];
-
  renderPatients();
  populateAppointmentPatients();
 }
 
-/* POPULATE PATIENT DROPDOWN */
+/* PATIENT DROPDOWN */
 function populateAppointmentPatients(){
  const select=document.getElementById("appointment_patient");
  const current=select.value;
@@ -448,7 +437,6 @@ function renderPatients(){
   String(p.full_name||"").toLowerCase().includes(search)||
   String(p.phone||"").toLowerCase().includes(search)
  ).forEach(p=>{
-
   const tr=document.createElement("tr");
 
   [p.full_name,p.phone,p.age].forEach(v=>{
@@ -508,7 +496,6 @@ function cancelEdit(){
  ].forEach(k=>setVal(k,""));
 
  document.getElementById("dentalFiles").value="";
-
  document.getElementById("formTitle").textContent="Register New Patient";
  document.getElementById("saveButton").textContent="Save Patient";
  document.getElementById("cancelButton").classList.add("hidden");
@@ -518,23 +505,16 @@ function cancelEdit(){
 async function uploadImages(patientId,oldPaths){
  const files=Array.from(document.getElementById("dentalFiles").files||[]);
 
- if(!files.length){
-  return oldPaths||[];
- }
+ if(!files.length)return oldPaths||[];
 
  const {data:{user},error:userError}=await db.auth.getUser();
 
- if(userError||!user){
-  throw new Error("Please login again.");
- }
+ if(userError||!user)throw new Error("Please login again.");
 
  const paths=[...(oldPaths||[])];
 
  for(const file of files){
-
-  if(!file.type.startsWith("image/")){
-   continue;
-  }
+  if(!file.type.startsWith("image/"))continue;
 
   if(file.size>10*1024*1024){
    throw new Error("Each image must be smaller than 10 MB.");
@@ -547,9 +527,7 @@ async function uploadImages(patientId,oldPaths){
    .from("patient-images")
    .upload(path,file);
 
-  if(error){
-   throw error;
-  }
+  if(error)throw error;
 
   paths.push(path);
  }
@@ -567,7 +545,7 @@ async function savePatient(){
  }
 
  const patient={
-  full_name:full_name,
+  full_name,
   phone:val("phone"),
   age:val("age")?Number(val("age")):null,
   gender:val("gender"),
@@ -587,7 +565,6 @@ async function savePatient(){
   let oldPaths=[];
 
   if(editingId!==null){
-
    const old=patients.find(p=>p.id===editingId);
    oldPaths=old?.dental_images||[];
 
@@ -599,7 +576,6 @@ async function savePatient(){
    if(error)throw error;
 
   }else{
-
    const {data,error}=await db
     .from("Patients")
     .insert([patient])
@@ -607,14 +583,12 @@ async function savePatient(){
     .single();
 
    if(error)throw error;
-
    patientId=data.id;
   }
 
   const paths=await uploadImages(patientId,oldPaths);
 
   if(paths.length){
-
    const {error}=await db
     .from("Patients")
     .update({dental_images:paths})
@@ -631,6 +605,88 @@ async function savePatient(){
  }catch(error){
   msg("Save failed: "+error.message);
  }
+}
+
+/* DELETE PATIENT */
+async function deletePatient(id){
+ if(!confirm("Are you sure you want to delete this patient?"))return;
+
+ const {error}=await db
+  .from("Patients")
+  .delete()
+  .eq("id",id);
+
+ if(error){
+  msg("Delete failed: "+error.message);
+  return;
+ }
+
+ msg("Patient deleted successfully");
+ await loadPatients();
+ await loadAppointments();
+}
+
+/* PATIENT DETAILS */
+async function showDetails(p){
+ const box=document.getElementById("detailsBox");
+ const content=document.getElementById("detailsContent");
+ const imageContent=document.getElementById("imageContent");
+
+ content.replaceChildren();
+ imageContent.replaceChildren();
+
+ const fields=[
+  ["Name",p.full_name],
+  ["Phone",p.phone],
+  ["Age",p.age],
+  ["Gender",p.gender],
+  ["Registration Date",p.registration_date],
+  ["Chief Complaint",p.chief_complaint],
+  ["Diagnosis",p.diagnosis],
+  ["Tooth Number",p.tooth_number],
+  ["Treatment",p.treatment],
+  ["Prescription",p.prescription],
+  ["Next Appointment",p.next_appointment],
+  ["Medical History",p.medical_history],
+  ["Address",p.address]
+ ];
+
+ fields.forEach(([label,value])=>{
+  const para=document.createElement("p");
+  const strong=document.createElement("strong");
+  strong.textContent=label+": ";
+  para.append(strong,document.createTextNode(value??""));
+  content.appendChild(para);
+ });
+
+ const paths=p.dental_images||[];
+
+ if(!paths.length){
+  imageContent.textContent="No images uploaded.";
+ }else{
+  for(const path of paths){
+   const {data,error}=await db.storage
+    .from("patient-images")
+    .createSignedUrl(path,3600);
+
+   if(error)continue;
+
+   const link=document.createElement("a");
+   link.href=data.signedUrl;
+   link.target="_blank";
+   link.rel="noopener";
+
+   const img=document.createElement("img");
+   img.src=data.signedUrl;
+   img.alt="Dental image";
+
+   link.appendChild(img);
+   imageContent.appendChild(link);
+  }
+ }
+
+ box.classList.remove("hidden");
+ box.scrollIntoView({behavior:"smooth"});
 }
 
 /* LOAD APPOINTMENTS */
@@ -653,17 +709,15 @@ async function loadAppointments(){
 /* RENDER APPOINTMENTS */
 function renderAppointments(){
  const body=document.getElementById("appointmentRows");
-
  body.replaceChildren();
 
  const filter=val("appointmentFilterDate");
 
- const sorted=[...appointments].filter(a=>
+ const sorted=appointments.filter(a=>
   !filter||a.appointment_date===filter
  );
 
  sorted.forEach(a=>{
-
   const patient=patients.find(p=>
    String(p.id)===String(a.patient_id)
   );
@@ -682,11 +736,7 @@ function renderAppointments(){
   values.forEach((v,i)=>{
    const td=document.createElement("td");
    td.textContent=v;
-
-   if(i===5){
-    td.className="status";
-   }
-
+   if(i===5)td.className="status";
    tr.appendChild(td);
   });
 
@@ -709,10 +759,8 @@ function renderAppointments(){
  if(!sorted.length){
   const tr=document.createElement("tr");
   const td=document.createElement("td");
-
   td.colSpan=7;
   td.textContent="No appointments found.";
-
   tr.appendChild(td);
   body.appendChild(tr);
  }
@@ -742,14 +790,11 @@ async function saveAppointment(){
   let result;
 
   if(editingAppointmentId!==null){
-
    result=await db
     .from("appointments")
     .update(appointment)
     .eq("id",editingAppointmentId);
-
   }else{
-
    appointment.id=Date.now();
 
    result=await db
@@ -757,9 +802,7 @@ async function saveAppointment(){
     .insert([appointment]);
   }
 
-  if(result.error){
-   throw result.error;
-  }
+  if(result.error)throw result.error;
 
   appointmentMsg(
    editingAppointmentId!==null
@@ -817,9 +860,7 @@ function clearAppointmentFilter(){
 
 /* DELETE APPOINTMENT */
 async function deleteAppointment(id){
- if(!confirm("Are you sure you want to delete this appointment?")){
-  return;
- }
+ if(!confirm("Are you sure you want to delete this appointment?"))return;
 
  const {error}=await db
   .from("appointments")
@@ -840,8 +881,40 @@ async function deleteAppointment(id){
  await loadAppointments();
 }
 
-/* PATIENT DETAILS */
-async function showDetails(p){
- const box=document.getElementById("detailsBox");
- const content=document.getElementById("detailsContent");
- const i
+/* CHECK LOGIN */
+async function checkLogin(){
+ if(!db)return;
+
+ try{
+  const {data:{session},error}=await db.auth.getSession();
+
+  if(error||!session){
+   document.getElementById("loginBox").classList.remove("hidden");
+   document.getElementById("app").classList.add("hidden");
+   return;
+  }
+
+  await showApp();
+
+ }catch(error){
+  console.log(error);
+ }
+}
+
+/* AUTO LOGOUT WHEN PAGE RETURNS */
+document.addEventListener("visibilitychange",()=>{
+ if(!document.hidden && document.getElementById("app").classList.contains("hidden")===false){
+  const startedAt=Number(sessionStorage.getItem("clinicLoginTime"));
+
+  if(startedAt && Date.now()-startedAt>=SESSION_LIMIT_MS){
+   logout();
+  }
+ }
+});
+
+/* START */
+document.addEventListener("DOMContentLoaded",checkLogin);
+</script>
+
+</body>
+</html>
