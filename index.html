@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -94,6 +93,10 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <label>Full Name</label><input id="full_name">
 <label>Phone Number</label><input id="phone" type="tel">
 <label>Age</label><input id="age" type="number" min="0">
+
+<label>Doctor Name</label>
+<input id="doctor_name" placeholder="Enter Doctor Name">
+
 <label>Gender</label>
 <select id="gender"><option value="">Select Gender</option><option>Male</option><option>Female</option><option>Other</option></select>
 <label>Registration Date</label><input id="registration_date" type="date">
@@ -295,7 +298,6 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 </section>
 </main>
 </div>
-
 <script>
 "use strict";
 
@@ -384,6 +386,22 @@ async function showApp(){
  $("detailsBox").classList.add("hidden");
  await loadPatients();await loadAppointments();
  showMessage("Login successful");
+}
+
+async function checkLogin(){
+ if(!db)return;
+ try{
+  const {data,error}=await db.auth.getSession();
+  if(error)throw error;
+  if(data.session){
+   if(!sessionStorage.getItem("clinicLoginTime")){
+    sessionStorage.setItem("clinicLoginTime",String(Date.now()));
+   }
+   await showApp();
+  }
+ }catch(e){
+  console.error("Session check error:",e.message);
+ }
 }
 
 async function logout(){
@@ -493,83 +511,41 @@ function applyLanguage(){
  document.documentElement.lang=clinicSettings.language==="ps"?"ps":clinicSettings.language==="fa"?"fa":"en";
 }
 
-/* SECURE PASSWORD CHANGE */
+/* PASSWORD CHANGE */
 async function changePassword(){
  const current=$("currentPassword").value;
  const p=$("newPassword").value;
  const c=$("confirmPassword").value;
  const msg=$("passwordChangeMessage");
  const btn=$("changePasswordButton");
-
  msg.textContent="";
-
- if(!db){
-  msg.textContent="Supabase is not connected.";
-  return;
- }
-
- if(!current||!p||!c){
-  msg.textContent="Please fill in all password fields.";
-  return;
- }
-
+ if(!db){msg.textContent="Supabase is not connected.";return}
+ if(!current||!p||!c){msg.textContent="Please fill in all password fields.";return}
  const strongPassword=/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-
  if(!strongPassword.test(p)){
-  msg.textContent="Password must contain at least 8 characters, uppercase, lowercase, number and special character.";
-  return;
+  msg.textContent="Password must contain at least 8 characters, uppercase, lowercase, number and special character.";return;
  }
-
- if(p!==c){
-  msg.textContent="New passwords do not match.";
-  return;
- }
-
- if(current===p){
-  msg.textContent="New password must be different from current password.";
-  return;
- }
-
+ if(p!==c){msg.textContent="New passwords do not match.";return}
+ if(current===p){msg.textContent="New password must be different from current password.";return}
  btn.disabled=true;
-
  try{
   msg.textContent="Verifying account...";
-
   const {data:userData,error:userError}=await db.auth.getUser();
   if(userError)throw userError;
-
   const user=userData.user;
-  if(!user||!user.email){
-   throw new Error("Account information not found. Please login again.");
-  }
-
+  if(!user||!user.email)throw new Error("Account information not found. Please login again.");
   const {data:verifyData,error:verifyError}=await db.auth.signInWithPassword({
-   email:user.email,
-   password:current
+   email:user.email,password:current
   });
-
   if(verifyError)throw new Error("Current password is incorrect.");
-
-  if(!verifyData.user||verifyData.user.id!==user.id){
-   throw new Error("Account verification failed.");
-  }
-
+  if(!verifyData.user||verifyData.user.id!==user.id)throw new Error("Account verification failed.");
   msg.textContent="Updating password...";
-
   const {error}=await db.auth.updateUser({password:p});
   if(error)throw error;
-
   msg.textContent="Password changed successfully. Your new password is now active.";
-
-  $("currentPassword").value="";
-  $("newPassword").value="";
-  $("confirmPassword").value="";
-
- }catch(e){
-  msg.textContent="Password change error: "+e.message;
- }finally{
-  btn.disabled=false;
- }
+  $("currentPassword").value="";$("newPassword").value="";$("confirmPassword").value="";
+ }catch(e){msg.textContent="Password change error: "+e.message}
+ finally{btn.disabled=false}
 }
 
 /* BACKUP EXPORT */
@@ -585,8 +561,7 @@ async function exportBackup(){
   if(p.error)throw p.error;if(a.error)throw a.error;
   if(pay.error)throw pay.error;if(s.error)throw s.error;
   const backup={
-   application:"Ayoubi Dental Clinic",
-   backupDate:new Date().toISOString(),
+   application:"Ayoubi Dental Clinic",backupDate:new Date().toISOString(),
    patients:p.data||[],appointments:a.data||[],
    patient_payments:pay.data||[],clinic_settings:s.data||null
   };
@@ -603,412 +578,479 @@ async function exportBackup(){
 async function previewRestore(){
  const file=$("restoreFile").files[0];
  $("restorePreview").classList.add("hidden");
- $("restoreMessage").textContent="";
- selectedRestoreBackup=null;
-
- if(!file){
-  $("restoreMessage").textContent="Please select a backup file.";
-  return;
- }
-
- if(file.size>50*1024*1024){
-  $("restoreMessage").textContent="Backup file is too large (maximum 50 MB).";
-  return;
- }
-
+ $("restoreMessage").textContent="";selectedRestoreBackup=null;
+ if(!file){$("restoreMessage").textContent="Please select a backup file.";return}
+ if(file.size>50*1024*1024){$("restoreMessage").textContent="Backup file is too large (maximum 50 MB).";return}
  try{
   const backup=JSON.parse(await file.text());
-
-  if(backup.application!=="Ayoubi Dental Clinic"){
-   throw new Error("This is not an Ayoubi Dental Clinic backup file.");
-  }
-
-  if(!Array.isArray(backup.patients)||
-     !Array.isArray(backup.appointments)||
-     !Array.isArray(backup.patient_payments)){
+  if(backup.application!=="Ayoubi Dental Clinic")throw new Error("This is not an Ayoubi Dental Clinic backup file.");
+  if(!Array.isArray(backup.patients)||!Array.isArray(backup.appointments)||!Array.isArray(backup.patient_payments))
    throw new Error("Backup file structure is invalid.");
-  }
-
   const patientIds=new Set();
-
   for(const p of backup.patients){
    if(p.id===undefined||p.id===null)throw new Error("A patient record has no ID.");
    patientIds.add(String(p.id));
   }
-
   for(const a of backup.appointments){
-   if(a.patient_id===undefined||a.patient_id===null||
-      !patientIds.has(String(a.patient_id))){
-    throw new Error("An appointment has an invalid patient ID.");
-   }
+   if(a.patient_id===undefined||!patientIds.has(String(a.patient_id)))throw new Error("An appointment has an invalid patient ID.");
    if(a.id===undefined||a.id===null)throw new Error("An appointment has no ID.");
   }
-
   for(const p of backup.patient_payments){
-   if(p.patient_id===undefined||p.patient_id===null||
-      !patientIds.has(String(p.patient_id))){
-    throw new Error("A payment has an invalid patient ID.");
-   }
+   if(p.patient_id===undefined||!patientIds.has(String(p.patient_id)))throw new Error("A payment has an invalid patient ID.");
    if(p.id===undefined||p.id===null)throw new Error("A payment has no ID.");
   }
-
   if(backup.clinic_settings!==null&&backup.clinic_settings!==undefined){
-   if(typeof backup.clinic_settings!=="object"||
-      backup.clinic_settings.id!==1){
-    throw new Error("Clinic settings data is invalid.");
-   }
+   if(typeof backup.clinic_settings!=="object"||backup.clinic_settings.id!==1)throw new Error("Clinic settings data is invalid.");
   }
-
   selectedRestoreBackup=backup;
-
-  $("restorePreviewText").textContent=
-   "Backup Date: "+(backup.backupDate||"Unknown")+
-   " | Patients: "+backup.patients.length+
-   " | Appointments: "+backup.appointments.length+
+  $("restorePreviewText").textContent="Backup Date: "+(backup.backupDate||"Unknown")+
+   " | Patients: "+backup.patients.length+" | Appointments: "+backup.appointments.length+
    " | Payments: "+backup.patient_payments.length+
    " | Clinic Settings: "+(backup.clinic_settings?"Included":"Not included");
-
   $("restorePreview").classList.remove("hidden");
   $("restoreMessage").textContent="Backup file is valid. Review the information before restoring.";
-
- }catch(e){
-  $("restoreMessage").textContent="Backup file error: "+e.message;
- }
+ }catch(e){$("restoreMessage").textContent="Backup file error: "+e.message}
 }
 
 async function restoreBackup(){
- if(!selectedRestoreBackup){
-  $("restoreMessage").textContent="Please preview a backup file first.";
-  return;
- }
-
+ if(!selectedRestoreBackup){$("restoreMessage").textContent="Please preview a backup file first.";return}
  const backup=selectedRestoreBackup;
-
- const confirmed=confirm(
-  "Restore this backup now?\n\n"+
-  "Records with matching IDs may be updated. "+
-  "Other records will remain. Make a fresh backup before continuing."
- );
-
- if(!confirmed)return;
-
- const restoreButton=$("restoreButton");
- const previewButton=$("previewRestoreButton");
- restoreButton.disabled=true;
- previewButton.disabled=true;
-
+ if(!confirm("Restore this backup now? Records with matching IDs may be updated. Make a fresh backup first."))return;
+ const restoreButton=$("restoreButton"),previewButton=$("previewRestoreButton");
+ restoreButton.disabled=true;previewButton.disabled=true;
  try{
   $("restoreMessage").textContent="Restoring patients...";
-
   if(backup.patients.length){
-   const {error}=await db.from("Patients")
-    .upsert(backup.patients,{onConflict:"id"});
+   const {error}=await db.from("Patients").upsert(backup.patients,{onConflict:"id"});
    if(error)throw new Error("Patients: "+error.message);
   }
-
   $("restoreMessage").textContent="Restoring appointments...";
-
   if(backup.appointments.length){
-   const {error}=await db.from("appointments")
-    .upsert(backup.appointments,{onConflict:"id"});
+   const {error}=await db.from("appointments").upsert(backup.appointments,{onConflict:"id"});
    if(error)throw new Error("Appointments: "+error.message);
   }
-
   $("restoreMessage").textContent="Restoring payments...";
-
   if(backup.patient_payments.length){
-   const {error}=await db.from("patient_payments")
-    .upsert(backup.patient_payments,{onConflict:"id"});
+   const {error}=await db.from("patient_payments").upsert(backup.patient_payments,{onConflict:"id"});
    if(error)throw new Error("Payments: "+error.message);
   }
-
   $("restoreMessage").textContent="Restoring clinic settings...";
-
   if(backup.clinic_settings){
-   const {error}=await db.from("clinic_settings")
-    .upsert(backup.clinic_settings,{onConflict:"id"});
+   const {error}=await db.from("clinic_settings").upsert(backup.clinic_settings,{onConflict:"id"});
    if(error)throw new Error("Settings: "+error.message);
   }
-
-  await loadSettings();
-  await loadPatients();
-  await loadAppointments();
-
-  $("restoreMessage").textContent=
-   "Backup records restored. Check your records and make sure everything is correct.";
-
-  $("restorePreview").classList.add("hidden");
-  $("restoreFile").value="";
-  selectedRestoreBackup=null;
-
+  await loadSettings();await loadPatients();await loadAppointments();
+  $("restoreMessage").textContent="Backup records restored. Check your records.";
+  $("restorePreview").classList.add("hidden");$("restoreFile").value="";selectedRestoreBackup=null;
  }catch(e){
-  $("restoreMessage").textContent=
-   "Restore error: "+e.message+
-   " Some records may already have been restored. Check your data before retrying.";
- }finally{
-  restoreButton.disabled=false;
-  previewButton.disabled=false;
- }
+  $("restoreMessage").textContent="Restore error: "+e.message+" Some records may already have been restored.";
+ }finally{restoreButton.disabled=false;previewButton.disabled=false}
 }
+ /* =========================
+   PATIENTS
+========================= */
 
-/* PATIENTS */
+const patientFields=[
+ "full_name","phone","age","doctor_name","gender",
+ "registration_date","chief_complaint","diagnosis",
+ "tooth_number","treatment","prescription",
+ "next_appointment","medical_history","address"
+];
+
 async function loadPatients(){
- const {data,error}=await db.from("Patients").select("*").order("id",{ascending:false});
- if(error){showMessage("Patients loading error: "+error.message);return}
- patients=data||[];renderPatients();populateAppointmentPatients();populatePaymentPatients();
-}
-
-function populateAppointmentPatients(){
- const s=$("appointment_patient"),prev=s.value;s.replaceChildren();
- const first=document.createElement("option");first.value="";first.textContent="Select a patient";s.appendChild(first);
- patients.forEach(p=>{
-  const o=document.createElement("option");o.value=p.id;
-  o.textContent=(p.full_name||"Unnamed")+" — "+(p.phone||"No phone");s.appendChild(o);
- });
- if(patients.some(p=>String(p.id)===String(prev)))s.value=prev;
-}
-
-function populatePaymentPatients(){
- const s=$("payment_patient"),prev=s.value,q=value("paymentPatientSearch").toLowerCase();
- s.replaceChildren();const first=document.createElement("option");
- first.value="";first.textContent="Select a patient";s.appendChild(first);
- const filtered=patients.filter(p=>String(p.full_name||"").toLowerCase().includes(q)||String(p.phone||"").toLowerCase().includes(q));
- filtered.forEach(p=>{
-  const o=document.createElement("option");o.value=p.id;
-  o.textContent=(p.full_name||"Unnamed")+" — "+(p.phone||"No phone");s.appendChild(o);
- });
- if(filtered.some(p=>String(p.id)===String(prev)))s.value=prev;
- else if(prev){s.value="";$("accountArea").classList.add("hidden");paymentHistory=[]}
- $("paymentSearchMessage").textContent=filtered.length===0?(patients.length===0?"No patients registered yet.":"No matching patients found."):filtered.length+" patient(s) found.";
-}
-function filterPaymentPatients(){populatePaymentPatients()}
-
-function renderPatients(){
- const q=value("search").toLowerCase(),body=$("patientRows");body.replaceChildren();
- const filtered=patients.filter(p=>String(p.full_name||"").toLowerCase().includes(q)||String(p.phone||"").toLowerCase().includes(q));
- filtered.forEach(p=>{
-  const tr=document.createElement("tr");
-  [p.full_name,p.phone,p.age].forEach(v=>{const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td)});
-  const td=document.createElement("td");td.className="actions";
-  const d=document.createElement("button");d.textContent="Details";d.onclick=()=>showDetails(p);
-  const e=document.createElement("button");e.textContent="Edit";e.onclick=()=>editPatient(p);
-  const x=document.createElement("button");x.textContent="Delete";x.className="danger";x.onclick=()=>deletePatient(p.id);
-  td.append(d,e,x);tr.appendChild(td);body.appendChild(tr);
- });
- if(!filtered.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="No patients found.";tr.appendChild(td);body.appendChild(tr)}
-}
-
-const patientFields=["full_name","phone","age","gender","registration_date","chief_complaint","diagnosis","tooth_number","treatment","prescription","next_appointment","medical_history","address"];
-
-function editPatient(p){
- editingId=p.id;patientFields.forEach(k=>setValue(k,p[k]));
- $("patientFormTitle").textContent="Edit Patient";$("savePatientButton").textContent="Update Patient";
- $("cancelPatientButton").classList.remove("hidden");showSection("patientSection");
-}
-function cancelEdit(){
- editingId=null;patientFields.forEach(k=>setValue(k,""));$("dentalFiles").value="";
- $("patientFormTitle").textContent="Register New Patient";$("savePatientButton").textContent="Save Patient";
- $("cancelPatientButton").classList.add("hidden");
-}
-
-async function uploadImages(patientId,oldPaths=[]){
- const files=Array.from($("dentalFiles").files||[]);if(!files.length)return oldPaths;
- const {data,error:userError}=await db.auth.getUser();
- if(userError||!data.user)throw new Error("Please login again.");
- const paths=[...(oldPaths||[])];
- for(const file of files){
-  if(!file.type.startsWith("image/"))continue;
-  if(file.size>10*1024*1024)throw new Error("Image must be smaller than 10 MB.");
-  const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
-  const path=data.user.id+"/"+patientId+"/"+Date.now()+"-"+safe;
-  const {error}=await db.storage.from("patient-images").upload(path,file);
-  if(error)throw error;paths.push(path);
+ if(!db)return;
+ try{
+  const {data,error}=await db.from("Patients").select("*").order("id",{ascending:false});
+  if(error)throw error;
+  patients=data||[];
+  renderPatients();
+ }catch(e){
+  console.error("Patients loading error:",e.message);
+  showMessage("Patients loading error: "+e.message);
  }
- return paths;
+}
+
+function renderPatients(list=patients){
+ const container=$("patientList");
+ if(!container)return;
+ if(!list.length){
+  container.innerHTML="<p>No patients found.</p>";return;
+ }
+ container.innerHTML=list.map(p=>`
+  <div class="patient-card">
+   <h3>${escapeHTML(p.full_name||"")}</h3>
+   <p><b>Phone:</b> ${escapeHTML(p.phone||"")}</p>
+   <p><b>Doctor:</b> ${escapeHTML(p.doctor_name||"Not entered")}</p>
+   <p><b>Age:</b> ${escapeHTML(p.age||"")}</p>
+   <div class="button-row">
+    <button onclick="showDetails(${Number(p.id)})">Details</button>
+    <button onclick="editPatient(${Number(p.id)})">Edit</button>
+    <button class="danger" onclick="deletePatient(${Number(p.id)})">Delete</button>
+   </div>
+  </div>
+ `).join("");
+}
+
+function escapeHTML(v){
+ return String(v??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+ }[c]));
 }
 
 async function savePatient(){
- const full_name=value("full_name");if(!full_name){alert("Please enter patient name.");return}
- const record={
-  full_name,phone:value("phone"),age:value("age")?Number(value("age")):null,
-  gender:value("gender"),registration_date:value("registration_date")||new Date().toISOString().slice(0,10),
-  chief_complaint:value("chief_complaint"),diagnosis:value("diagnosis"),tooth_number:value("tooth_number"),
-  treatment:value("treatment"),prescription:value("prescription"),next_appointment:value("next_appointment")||null,
-  medical_history:value("medical_history"),address:value("address")
- };
- $("savePatientButton").disabled=true;
+ const name=value("full_name");
+ if(!name){showMessage("Please enter patient name.");return}
+
+ const record={};
+ patientFields.forEach(id=>{
+  if($(id))record[id]=value(id)||null;
+ });
+
+ if(record.age)record.age=Number(record.age);
+
+ const btn=$("savePatientButton");
+ if(btn)btn.disabled=true;
+
  try{
-  let id=editingId,oldPaths=[];
-  if(editingId!==null){
-   const old=patients.find(p=>String(p.id)===String(editingId));oldPaths=old?.dental_images||[];
-   const {error}=await db.from("Patients").update(record).eq("id",editingId);if(error)throw error;
+  let result;
+  if(editingId){
+   result=await db.from("Patients").update(record).eq("id",editingId);
   }else{
-   const {data,error}=await db.from("Patients").insert([record]).select().single();if(error)throw error;id=data.id;
+   result=await db.from("Patients").insert(record);
   }
-  const paths=await uploadImages(id,oldPaths);
-  if(paths.length){const {error}=await db.from("Patients").update({dental_images:paths}).eq("id",id);if(error)throw error}
-  showMessage(editingId!==null?"Patient updated successfully.":"Patient saved successfully.");
-  cancelEdit();await loadPatients();showSection("dashboardSection");
- }catch(e){showMessage("Save error: "+e.message);alert("Save error: "+e.message)}
- finally{$("savePatientButton").disabled=false}
+  if(result.error)throw result.error;
+
+  showMessage(editingId?"Patient updated successfully.":"Patient registered successfully.");
+  cancelEdit();
+  await loadPatients();
+ }catch(e){
+  showMessage("Patient save error: "+e.message);
+ }finally{
+  if(btn)btn.disabled=false;
+ }
+}
+
+function cancelEdit(){
+ editingId=null;
+ patientFields.forEach(id=>{if($(id))setValue(id,"")});
+ if($("savePatientButton"))$("savePatientButton").textContent="Register Patient";
+ if($("cancelPatientButton"))$("cancelPatientButton").classList.add("hidden");
+}
+
+function editPatient(id){
+ const p=patients.find(x=>String(x.id)===String(id));
+ if(!p)return;
+ editingId=id;
+ patientFields.forEach(field=>{
+  if($(field))setValue(field,p[field]??"");
+ });
+ if($("savePatientButton"))$("savePatientButton").textContent="Update Patient";
+ if($("cancelPatientButton"))$("cancelPatientButton").classList.remove("hidden");
+ showSection("patientSection");
+ window.scrollTo({top:0,behavior:"smooth"});
 }
 
 async function deletePatient(id){
- if(!confirm("Are you sure you want to delete this patient?"))return;
- const {error}=await db.from("Patients").delete().eq("id",id);
- if(error){showMessage("Delete error: "+error.message);return}
- showMessage("Patient deleted.");await loadPatients();await loadAppointments();
-}
-
-function addDetail(parent,label,v){
- const p=document.createElement("p"),b=document.createElement("strong");
- b.textContent=label+": ";p.append(b,document.createTextNode(v==null?"":String(v)));parent.appendChild(p);
-}
-
-/* PATIENT DETAILS AND PAYMENT HISTORY */
-async function showDetails(patient){
- const box=$("detailsBox"),content=$("detailsContent"),images=$("imageContent"),paymentBox=$("detailsPaymentContent");
- content.replaceChildren();images.replaceChildren();paymentBox.textContent="Loading payment information...";
- patientFields.forEach(k=>addDetail(content,k.replaceAll("_"," "),patient[k]));
- box.classList.remove("hidden");box.scrollIntoView({behavior:"smooth"});
+ const p=patients.find(x=>String(x.id)===String(id));
+ if(!p)return;
+ if(!confirm("Delete patient "+p.full_name+"? This may also affect linked records."))return;
  try{
-  const {data,error}=await db.from("patient_payments").select("*").eq("patient_id",patient.id).order("created_at",{ascending:true});
+  const {error}=await db.from("Patients").delete().eq("id",id);
   if(error)throw error;
-  const history=data||[],latest=history.length?history[history.length-1]:null;
-  const fee=latest?Number(latest.total_fee||0):0;
-  const paid=history.reduce((s,r)=>s+Number(r.amount_paid||0),0),balance=fee-paid;
-  paymentBox.replaceChildren();const stats=document.createElement("div");stats.className="stat-grid";
-  [["Total Treatment Fee",fee],["Total Paid",paid],["Remaining Balance",balance]].forEach(([label,n])=>{
-   const c=document.createElement("div");c.className="stat";const t=document.createElement("div");t.textContent=label;
-   const strong=document.createElement("strong");strong.textContent=money(n);c.append(t,strong);stats.appendChild(c);
-  });
-  paymentBox.appendChild(stats);
-  const h=document.createElement("h3");h.textContent="Payment History";paymentBox.appendChild(h);
-  const wrap=document.createElement("div");wrap.className="table-wrap";const table=document.createElement("table");
-  const head=document.createElement("thead"),hr=document.createElement("tr");
-  ["Date","Total Fee","Amount Paid","Notes"].forEach(v=>{const th=document.createElement("th");th.textContent=v;hr.appendChild(th)});
-  head.appendChild(hr);table.appendChild(head);const body=document.createElement("tbody");
-  if(history.length)[...history].reverse().forEach(r=>{
-   const tr=document.createElement("tr");
-   [r.payment_date,money(r.total_fee),money(r.amount_paid),r.notes||""].forEach(v=>{const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td)});
-   body.appendChild(tr);
-  });else{const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="No payment history yet.";tr.appendChild(td);body.appendChild(tr)}
-  table.appendChild(body);wrap.appendChild(table);paymentBox.appendChild(wrap);
- }catch(e){paymentBox.textContent="Payment loading error: "+e.message}
- const paths=patient.dental_images||[];
- if(!paths.length){images.textContent="No images uploaded.";return}
+  showMessage("Patient deleted successfully.");
+  await loadPatients();
+ }catch(e){showMessage("Delete error: "+e.message)}
+}
+
+function searchPatients(){
+ const q=value("patientSearch").toLowerCase();
+ const filtered=patients.filter(p=>
+  [p.full_name,p.phone,p.doctor_name,p.address]
+   .some(v=>String(v||"").toLowerCase().includes(q))
+ );
+ renderPatients(filtered);
+}
+
+async function showDetails(id){
+ const p=patients.find(x=>String(x.id)===String(id));
+ if(!p)return;
+
+ $("detailsBox").classList.remove("hidden");
+ $("detailsContent").innerHTML=`
+  <h2>Patient Details</h2>
+  ${patientFields.map(f=>`
+   <p><b>${escapeHTML(f.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase()))}:</b>
+   ${escapeHTML(p[f]||"—")}</p>
+  `).join("")}
+  <div id="patientImages"></div>
+  <div id="patientAccountDetails">Loading payment account...</div>
+  <button onclick="editPatient(${Number(p.id)})">Edit Patient</button>
+  <button onclick="closeDetails()">Close</button>
+ `;
+ $("detailsBox").scrollIntoView({behavior:"smooth"});
+ await showPatientImages(p);
+ await loadPatientAccountDetails(p.id);
+}
+
+function closeDetails(){
+ $("detailsBox").classList.add("hidden");
+}
+
+async function showPatientImages(p){
+ const area=$("patientImages");
+ if(!area)return;
+ area.innerHTML="<h3>Patient Images / X-rays</h3>";
+ const paths=Array.isArray(p.dental_images)?p.dental_images:[];
+ if(!paths.length){
+  area.innerHTML+="<p>No images uploaded.</p>";return;
+ }
  for(const path of paths){
-  const {data,error}=await db.storage.from("patient-images").createSignedUrl(path,3600);
-  if(error){const p=document.createElement("p");p.textContent="Image access error: "+error.message;images.appendChild(p);continue}
-  const img=document.createElement("img");img.className="patient-image";img.src=data.signedUrl;
-  img.alt="Patient dental image";img.loading="lazy";img.style.cursor="pointer";
-  img.onclick=()=>window.open(data.signedUrl,"_blank");images.appendChild(img);
+  try{
+   const {data,error}=await db.storage.from("patient-images").createSignedUrl(path,3600);
+   if(error)throw error;
+   const img=document.createElement("img");
+   img.src=data.signedUrl;
+   img.alt="Patient dental image";
+   img.style.maxWidth="180px";
+   img.style.margin="6px";
+   area.appendChild(img);
+  }catch(e){
+   console.error("Image loading error:",e.message);
+  }
  }
 }
-function closeDetails(){$("detailsBox").classList.add("hidden");window.scrollTo({top:0,behavior:"smooth"})}
 
-/* APPOINTMENTS */
-async function loadAppointments(){
- const {data,error}=await db.from("appointments").select("*").order("appointment_date",{ascending:true});
- if(error){appointmentMessage("Appointments loading error: "+error.message);return}
- appointments=data||[];renderAppointments();
+/* =========================
+   PATIENT SEARCH
+========================= */
+
+if($("patientSearch")){
+ $("patientSearch").addEventListener("input",searchPatients);
 }
-function patientForAppointment(id){return patients.find(p=>String(p.id)===String(id))}
-function renderAppointments(){
- const body=$("appointmentRows"),filter=value("appointmentFilterDate");body.replaceChildren();
- const list=appointments.filter(a=>!filter||a.appointment_date===filter);
- list.forEach(a=>{
-  const p=patientForAppointment(a.patient_id),tr=document.createElement("tr");
-  [p?.full_name||"Unknown patient",p?.phone||"",a.appointment_date,a.appointment_time,a.reason,a.status].forEach(v=>{
-   const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td);
+
+/* =========================
+   PATIENT PAYMENTS
+========================= */
+
+function populatePaymentPatients(){
+ const select=$("paymentPatient");
+ if(!select)return;
+ const current=select.value;
+ select.innerHTML='<option value="">Select Patient</option>'+
+ patients.map(p=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.full_name)} - ${escapeHTML(p.phone||"")}</option>`).join("");
+ if(current)select.value=current;
+}
+
+async function loadPatientAccount(){
+ const id=$("paymentPatient").value;
+ if(!id){
+  $("paymentAccount").innerHTML="Select a patient to view account.";
+  return;
+ }
+ await loadPatientAccountDetails(id);
+}
+
+async function loadPatientAccountDetails(id){
+ const area=$("patientAccountDetails")||$("paymentAccount");
+ if(!area)return;
+ area.innerHTML="Loading account...";
+ try{
+  const {data,error}=await db.from("patient_payments")
+   .select("*").eq("patient_id",id).order("payment_date",{ascending:false});
+  if(error)throw error;
+
+  const rows=data||[];
+  const feeRows=rows.filter(x=>x.total_fee!==null&&x.total_fee!==undefined);
+  const totalFee=feeRows.length?Number(feeRows[0].total_fee||0):0;
+  const totalPaid=rows.reduce((sum,x)=>sum+Number(x.amount_paid||0),0);
+  const balance=totalFee-totalPaid;
+
+  area.innerHTML=`
+   <h3>Payment Account</h3>
+   <p><b>Total Fee:</b> ${money(totalFee)}</p>
+   <p><b>Total Paid:</b> ${money(totalPaid)}</p>
+   <p><b>Remaining Balance:</b> ${money(balance)}</p>
+   <h4>Payment History</h4>
+   ${rows.length?rows.map(r=>`
+    <div class="payment-row">
+     <p><b>Date:</b> ${escapeHTML(r.payment_date||"")}</p>
+     <p><b>Fee:</b> ${money(r.total_fee||0)}</p>
+     <p><b>Paid:</b> ${money(r.amount_paid||0)}</p>
+     <p><b>Notes:</b> ${escapeHTML(r.notes||"")}</p>
+    </div>
+   `).join(""):"<p>No payment history.</p>"}
+  `;
+ }catch(e){
+  area.innerHTML="Account loading error: "+escapeHTML(e.message);
+ }
+}
+
+async function savePayment(){
+ const patientId=$("paymentPatient").value;
+ const fee=Number(value("totalFee")||0);
+ const paid=Number(value("amountPaid")||0);
+ const date=value("paymentDate");
+ const notes=value("paymentNotes");
+
+ if(!patientId){$("paymentMessage").textContent="Please select a patient.";return}
+ if(fee<0||paid<0){$("paymentMessage").textContent="Amounts cannot be negative.";return}
+ if(!date){$("paymentMessage").textContent="Please select payment date.";return}
+
+ try{
+  const {error}=await db.from("patient_payments").insert({
+   patient_id:patientId,
+   total_fee:fee,
+   amount_paid:paid,
+   payment_date:date,
+   notes:notes||null
   });
-  const td=document.createElement("td");td.className="actions";
-  const e=document.createElement("button");e.textContent="Edit";e.onclick=()=>editAppointment(a);
-  const d=document.createElement("button");d.textContent="Delete";d.className="danger";d.onclick=()=>deleteAppointment(a.id);
-  td.append(e,d);tr.appendChild(td);body.appendChild(tr);
- });
- if(!list.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent="No appointments found.";tr.appendChild(td);body.appendChild(tr)}
+  if(error)throw error;
+  $("paymentMessage").textContent="Payment saved successfully.";
+  $("amountPaid").value="";
+  $("paymentNotes").value="";
+  await loadPatientAccount();
+ }catch(e){
+  $("paymentMessage").textContent="Payment save error: "+e.message;
+ }
 }
+
+/* =========================
+   APPOINTMENTS
+========================= */
+
+async function loadAppointments(){
+ if(!db)return;
+ try{
+  const {data,error}=await db.from("appointments")
+   .select("*").order("appointment_date",{ascending:false});
+  if(error)throw error;
+  appointments=data||[];
+  renderAppointments();
+ }catch(e){
+  appointmentMessage("Appointments loading error: "+e.message);
+ }
+}
+
+function populateAppointmentPatients(){
+ const select=$("appointmentPatient");
+ if(!select)return;
+ const current=select.value;
+ select.innerHTML='<option value="">Select Patient</option>'+
+  patients.map(p=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.full_name)}</option>`).join("");
+ if(current)select.value=current;
+}
+
 async function saveAppointment(){
- const patientId=value("appointment_patient"),date=value("appointment_date");
+ const patientId=$("appointmentPatient").value;
+ const date=value("appointmentDate");
+ const time=value("appointmentTime");
+
  if(!patientId){appointmentMessage("Please select a patient.");return}
  if(!date){appointmentMessage("Please select appointment date.");return}
- const record={patient_id:patientId,appointment_date:date,appointment_time:value("appointment_time")||null,
- reason:value("appointment_reason"),status:value("appointment_status"),notes:value("appointment_notes")};
- $("saveAppointmentButton").disabled=true;
- try{
-  if(editingAppointmentId!==null){
-   const {error}=await db.from("appointments").update(record).eq("id",editingAppointmentId);if(error)throw error;
-   appointmentMessage("Appointment updated successfully.");
-  }else{
-   const {error}=await db.from("appointments").insert([record]);if(error)throw error;
-   appointmentMessage("Appointment saved successfully.");
-  }
-  cancelAppointmentEdit();await loadAppointments();
- }catch(e){appointmentMessage("Appointment error: "+e.message)}
- finally{$("saveAppointmentButton").disabled=false}
-}
-function editAppointment(a){
- editingAppointmentId=a.id;setValue("appointment_patient",a.patient_id);setValue("appointment_date",a.appointment_date);
- setValue("appointment_time",a.appointment_time);setValue("appointment_reason",a.reason);
- setValue("appointment_status",a.status);setValue("appointment_notes",a.notes);
- $("appointmentTitle").textContent="Edit Appointment";$("saveAppointmentButton").textContent="Update Appointment";
- $("cancelAppointmentButton").classList.remove("hidden");$("appointmentTitle").scrollIntoView({behavior:"smooth"});
-}
-function cancelAppointmentEdit(){
- editingAppointmentId=null;setValue("appointment_patient","");setValue("appointment_date","");
- setValue("appointment_time","");setValue("appointment_reason","");setValue("appointment_status","Scheduled");
- setValue("appointment_notes","");$("appointmentTitle").textContent="Appointment Management";
- $("saveAppointmentButton").textContent="Save Appointment";$("cancelAppointmentButton").classList.add("hidden");
-}
-async function deleteAppointment(id){
- if(!confirm("Are you sure you want to delete this appointment?"))return;
- const {error}=await db.from("appointments").delete().eq("id",id);
- if(error){appointmentMessage("Delete error: "+error.message);return}
- appointmentMessage("Appointment deleted.");await loadAppointments();
-}
-function clearAppointmentFilter(){$("appointmentFilterDate").value="";renderAppointments()}
 
-/* PAYMENTS */
-async function loadPatientAccount(){
- const patientId=value("payment_patient");$("accountArea").classList.add("hidden");$("paymentMessage").textContent="";
- if(!patientId)return;
- $("accountArea").classList.remove("hidden");$("paymentRows").replaceChildren();
- $("totalFeeDisplay").textContent="Loading...";$("totalPaidDisplay").textContent="Loading...";$("balanceDisplay").textContent="Loading...";
- const {data,error}=await db.from("patient_payments").select("*").eq("patient_id",patientId).order("created_at",{ascending:true});
- if(error){$("paymentMessage").textContent="Account loading error: "+error.message;return}
- paymentHistory=data||[];const latest=paymentHistory.length?paymentHistory[paymentHistory.length-1]:null;
- const fee=latest?Number(latest.total_fee||0):0,paid=paymentHistory.reduce((s,r)=>s+Number(r.amount_paid||0),0),balance=fee-paid;
- $("totalFeeDisplay").textContent=money(fee);$("totalPaidDisplay").textContent=money(paid);$("balanceDisplay").textContent=money(balance);
- $("payment_total_fee").value=fee;$("payment_amount").value="";$("payment_date").value=new Date().toISOString().slice(0,10);$("payment_notes").value="";
- const body=$("paymentRows");body.replaceChildren();
- [...paymentHistory].reverse().forEach(r=>{
-  const tr=document.createElement("tr");
-  [r.payment_date,money(r.total_fee),money(r.amount_paid),r.notes||""].forEach(v=>{const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td)});
-  body.appendChild(tr);
- });
- if(!paymentHistory.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="No payment history yet.";tr.appendChild(td);body.appendChild(tr)}
-}
-async function savePayment(){
- const patientId=value("payment_patient");if(!patientId){$("paymentMessage").textContent="Please select a patient.";return}
- const totalFee=Number(value("payment_total_fee")),amount=Number(value("payment_amount")||0),date=value("payment_date");
- if(!Number.isFinite(totalFee)||totalFee<0){$("paymentMessage").textContent="Please enter a valid total fee.";return}
- if(!Number.isFinite(amount)||amount<0){$("paymentMessage").textContent="Please enter a valid payment amount.";return}
- if(!date){$("paymentMessage").textContent="Please select payment date.";return}
- const oldPaid=paymentHistory.reduce((s,r)=>s+Number(r.amount_paid||0),0);
- if(amount>0&&oldPaid+amount>totalFee){$("paymentMessage").textContent="Payment is greater than the remaining balance. Please check the amounts.";return}
- $("savePaymentButton").disabled=true;$("paymentMessage").textContent="Saving...";
+ const record={
+  patient_id:patientId,
+  appointment_date:date,
+  appointment_time:time||null,
+  reason:value("appointmentReason")||null,
+  status:value("appointmentStatus")||"Scheduled",
+  notes:value("appointmentNotes")||null
+ };
+
  try{
-  const {error}=await db.from("patient_payments").insert([{
-   patient_id:patientId,total_fee:totalFee,amount_paid:amount,payment_date:date,notes:value("payment_notes")
-  }]);
-  if(error)throw error;await loadPatientAccount();$("paymentMessage").textContent="Payment saved successfully.";
- }catch(e){$("paymentMessage").textContent="Payment error: "+e.message}
- finally{$("savePaymentButton").disabled=false}
+  let result;
+  if(editingAppointmentId){
+   result=await db.from("appointments").update(record).eq("id",editingAppointmentId);
+  }else{
+   result=await db.from("appointments").insert(record);
+  }
+  if(result.error)throw result.error;
+  appointmentMessage(editingAppointmentId?"Appointment updated.":"Appointment saved.");
+  cancelAppointmentEdit();
+  await loadAppointments();
+ }catch(e){appointmentMessage("Appointment save error: "+e.message)}
 }
+
+function renderAppointments(list=appointments){
+ const container=$("appointmentList");
+ if(!container)return;
+ if(!list.length){container.innerHTML="<p>No appointments found.</p>";return}
+ container.innerHTML=list.map(a=>{
+  const p=patients.find(x=>String(x.id)===String(a.patient_id));
+  return `<div class="appointment-card">
+   <h3>${escapeHTML(p?.full_name||"Unknown Patient")}</h3>
+   <p><b>Date:</b> ${escapeHTML(a.appointment_date||"")}</p>
+   <p><b>Time:</b> ${escapeHTML(a.appointment_time||"")}</p>
+   <p><b>Reason:</b> ${escapeHTML(a.reason||"")}</p>
+   <p><b>Status:</b> ${escapeHTML(a.status||"")}</p>
+   <p><b>Notes:</b> ${escapeHTML(a.notes||"")}</p>
+   <button onclick="editAppointment(${Number(a.id)})">Edit</button>
+   <button class="danger" onclick="deleteAppointment(${Number(a.id)})">Delete</button>
+  </div>`;
+ }).join("");
+}
+
+function editAppointment(id){
+ const a=appointments.find(x=>String(x.id)===String(id));
+ if(!a)return;
+ editingAppointmentId=id;
+ setValue("appointmentPatient",a.patient_id);
+ setValue("appointmentDate",a.appointment_date);
+ setValue("appointmentTime",a.appointment_time);
+ setValue("appointmentReason",a.reason);
+ setValue("appointmentStatus",a.status);
+ setValue("appointmentNotes",a.notes);
+ $("saveAppointmentButton").textContent="Update Appointment";
+ $("cancelAppointmentButton").classList.remove("hidden");
+ showSection("appointmentSection");
+}
+
+function cancelAppointmentEdit(){
+ editingAppointmentId=null;
+ ["appointmentPatient","appointmentDate","appointmentTime",
+  "appointmentReason","appointmentStatus","appointmentNotes"].forEach(id=>{
+  if($(id))setValue(id,"");
+ });
+ if($("saveAppointmentButton"))$("saveAppointmentButton").textContent="Save Appointment";
+ if($("cancelAppointmentButton"))$("cancelAppointmentButton").classList.add("hidden");
+}
+
+async function deleteAppointment(id){
+ if(!confirm("Delete this appointment?"))return;
+ try{
+  const {error}=await db.from("appointments").delete().eq("id",id);
+  if(error)throw error;
+  appointmentMessage("Appointment deleted.");
+  await loadAppointments();
+ }catch(e){appointmentMessage("Delete error: "+e.message)}
+}
+
+function filterAppointments(){
+ const date=value("appointmentDateFilter");
+ const list=date?appointments.filter(a=>a.appointment_date===date):appointments;
+ renderAppointments(list);
+}
+
+/* =========================
+   BUTTON EVENTS
+========================= */
+
+if($("savePatientButton"))$("savePatientButton").addEventListener("click",savePatient);
+if($("cancelPatientButton"))$("cancelPatientButton").addEventListener("click",cancelEdit);
+if($("savePaymentButton"))$("savePaymentButton").addEventListener("click",savePayment);
+if($("paymentPatient"))$("paymentPatient").addEventListener("change",loadPatientAccount);
+if($("saveAppointmentButton"))$("saveAppointmentButton").addEventListener("click",saveAppointment);
+if($("cancelAppointmentButton"))$("cancelAppointmentButton").addEventListener("click",cancelAppointmentEdit);
+if($("appointmentDateFilter"))$("appointmentDateFilter").addEventListener("change",filterAppointments);
+
+if($("saveSettingsButton"))$("saveSettingsButton").addEventListener("click",saveSettings);
+if($("changePasswordButton"))$("changePasswordButton").addEventListener("click",changePassword);
+if($("exportBackupButton"))$("exportBackupButton").addEventListener("click",exportBackup);
+if($("previewRestoreButton"))$("previewRestoreButton").addEventListener("click",previewRestore);
+if($("restoreButton"))$("restoreButton").addEventListener("click",restoreBackup);
+
+if($("logoutButton"))$("logoutButton").addEventListener("click",logout);
 
 initializeSupabase();
 checkLogin();
 </script>
-</body>
-</html>
