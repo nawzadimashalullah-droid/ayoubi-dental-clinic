@@ -180,10 +180,20 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <button class="back-button" onclick="showSection('dashboardSection')">← Dashboard</button>
 <h2>Patient Account / Payments</h2>
 
+<label>Search Patient by Name or Phone</label>
+<input
+ id="paymentPatientSearch"
+ type="search"
+ placeholder="Type patient name or phone number..."
+ oninput="filterPaymentPatients()"
+>
+
 <label>Select Patient</label>
 <select id="payment_patient" onchange="loadPatientAccount()">
 <option value="">Select a patient</option>
 </select>
+
+<p id="paymentSearchMessage" class="message"></p>
 
 <div id="accountArea" class="hidden">
 <div class="stat-grid">
@@ -396,18 +406,49 @@ function populateAppointmentPatients(){
  if(patients.some(p=>String(p.id)===String(previous)))select.value=previous;
 }
 
+/* PAYMENT PATIENT SEARCH AND FILTER */
+
 function populatePaymentPatients(){
- const select=$("payment_patient"),previous=select.value;
+ const select=$("payment_patient");
+ const previous=select.value;
+ const query=value("paymentPatientSearch").toLowerCase();
+
  select.replaceChildren();
+
  const first=document.createElement("option");
- first.value="";first.textContent="Select a patient";select.appendChild(first);
- patients.forEach(p=>{
+ first.value="";
+ first.textContent="Select a patient";
+ select.appendChild(first);
+
+ const filtered=patients.filter(p=>{
+  const name=String(p.full_name||"").toLowerCase();
+  const phone=String(p.phone||"").toLowerCase();
+  return name.includes(query)||phone.includes(query);
+ });
+
+ filtered.forEach(p=>{
   const option=document.createElement("option");
   option.value=p.id;
   option.textContent=(p.full_name||"Unnamed")+" — "+(p.phone||"No phone");
   select.appendChild(option);
  });
- if(patients.some(p=>String(p.id)===String(previous)))select.value=previous;
+
+ if(filtered.some(p=>String(p.id)===String(previous))){
+  select.value=previous;
+ }else if(previous){
+  select.value="";
+  $("accountArea").classList.add("hidden");
+  paymentHistory=[];
+ }
+
+ $("paymentSearchMessage").textContent=
+  filtered.length===0
+   ? (patients.length===0?"No patients registered yet.":"No matching patients found.")
+   : filtered.length+" patient(s) found.";
+}
+
+function filterPaymentPatients(){
+ populatePaymentPatients();
 }
 
 function renderPatients(){
