@@ -87,6 +87,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <section class="card" id="dashboardSection">
 <h2 id="dashboardTitle">Dashboard</h2>
 <p id="welcomeText">Welcome to Ayoubi Dental Clinic</p>
+<p id="accountRoleInfo" class="message"></p>
 <p id="dashboardMessage" class="message"></p>
 <div class="menu-grid">
 <button class="menu-button" onclick="showSection('patientSection')">👤<br><span data-i18n="patients">Patient Registration</span></button>
@@ -243,7 +244,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <div class="settings-item">
 <h3>8. Backup & Restore</h3>
 <p>د کلینیک معلومات په JSON فایل کې ښکته کړه یا له Backup څخه یې بېرته راواخله.</p>
-<button type="button" onclick="exportBackup()">Download Backup</button><p id="backupMessage" class="message"></p>
+<button type="button" class="branch-export" onclick="exportBackup()">Download Backup</button><p id="backupMessage" class="message"></p>
 <hr><h3>Restore Backup</h3>
 <label>Select Backup File (JSON)</label><input type="file" id="restoreFile" accept=".json,application/json">
 <button type="button" id="previewRestoreButton" onclick="previewRestore()">Preview Backup</button>
@@ -255,7 +256,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <p id="restoreMessage" class="message"></p>
 <p>یادونه: د عکسونو اصلي فایلونه په Backup کې نه شاملېږي.</p>
 </div>
-<div class="settings-item"><h3>9. Data Management</h3><button type="button" onclick="exportBackup()">Export Clinic Data</button><p>د ناروغانو، ملاقاتونو، تادیاتو او غاښونو نقشه Backup کې شاملېږي.</p></div>
+<div class="settings-item"><h3>9. Data Management</h3><button type="button" class="branch-export" onclick="exportBackup()">Export Clinic Data</button><p>د ناروغانو، ملاقاتونو، تادیاتو او غاښونو نقشه Backup کې شاملېږي.</p></div>
 </div>
 <hr><button type="button" id="saveSettingsButton" onclick="saveSettings()">Save All Settings</button>
 <p id="settingsMessage" class="message"></p>
@@ -356,6 +357,7 @@ const SUPABASE_URL="https://qrmgjgzgvbisuhqimqmd.supabase.co";
 const SUPABASE_KEY="sb_publishable_DRumx3hmN-hbGf63QrAlAg_USLgJ_mx";
 const BRANCHES=["Main Branch","Second Representative Branch","Third Representative Branch"];
 let db=null,patients=[],appointments=[],paymentHistory=[],editingId=null,editingAppointmentId=null,logoutTimer=null,isLoggingOut=false;
+let currentUserId=null,currentUserRole=null,currentUserBranch=null;
 let clinicSettings={clinicName:"Ayoubi Dental Clinic",phone:"",address:"",logo:"",language:"en",currency:"AFN",theme:"pink",timeout:60};
 let selectedRestoreBackup=null,chartRecords=[],selectedToothFDI=null,lastFullHistory=null;
 
@@ -397,7 +399,7 @@ async function login(){
  if(!email||!password){$("loginMessage").textContent="Enter email and password.";return}
  $("loginButton").disabled=true;$("loginMessage").textContent="Logging in...";
  try{const {data,error}=await db.auth.signInWithPassword({email,password});if(error)throw error;if(!data.session)throw new Error("Login session was not created.");sessionStorage.setItem("clinicLoginTime",String(Date.now()));await showApp()}
- catch(e){$("loginMessage").textContent="Login failed: "+e.message}
+ catch(e){try{await db.auth.signOut()}catch(_){}currentUserId=null;currentUserRole=null;currentUserBranch=null;$("app").classList.add("hidden");$("loginBox").classList.remove("hidden");$("loginMessage").textContent="Login failed: "+e.message}
  finally{$("loginButton").disabled=false}
 }
 function startSessionTimer(){
@@ -407,20 +409,57 @@ function startSessionTimer(){
  if(remaining<=0){logout();return}logoutTimer=setTimeout(logout,remaining);
 }
 async function showApp(){
- await loadSettings();const {data:userData}=await db.auth.getUser();$("accountEmail").value=userData?.user?.email||"";
- startSessionTimer();$("loginBox").classList.add("hidden");$("app").classList.remove("hidden");
+ const {data:userData,error:userError}=await db.auth.getUser();if(userError)throw userError;
+ const user=userData?.user;if(!user)throw new Error("Login session not found. Please login again.");
+ const {data:profile,error:profileError}=await db.from("user_profiles").select("role,branch").eq("user_id",user.id).single();
+ if(profileError)throw new Error("Account permissions could not be loaded: "+profileError.message);
+ if(!profile||!(["admin","branch"].includes(profile.role))||(profile.role==="branch"&&!BRANCHES.includes(profile.branch))||(profile.role==="admin"&&profile.branch!==null))throw new Error("This account has an invalid role or branch profile. Contact the administrator.");
+ currentUserId=user.id;currentUserRole=profile.role;currentUserBranch=profile.branch||null;
+ $("accountEmail").value=user.email||"";
+ await loadSettings();applyRolePermissions();startSessionTimer();
+ $("loginBox").classList.add("hidden");$("app").classList.remove("hidden");
  $("dashboardSection").classList.remove("hidden");document.querySelectorAll(".page-section").forEach(s=>s.classList.add("hidden"));$("detailsBox").classList.add("hidden");
  await loadPatients();await loadAppointments();showMessage("Login successful");
 }
 async function checkLogin(){
  if(!db)return;try{const {data,error}=await db.auth.getSession();if(error)throw error;if(data.session){if(!sessionStorage.getItem("clinicLoginTime"))sessionStorage.setItem("clinicLoginTime",String(Date.now()));await showApp()}}
- catch(e){console.error("Session check error:",e.message)}
+ catch(e){console.error("Session check error:",e.message);try{await db.auth.signOut()}catch(_){}sessionStorage.removeItem("clinicLoginTime");$("loginMessage").textContent=e.message}
 }
 async function logout(){
  if(isLoggingOut)return;isLoggingOut=true;if(logoutTimer)clearTimeout(logoutTimer);logoutTimer=null;
  sessionStorage.removeItem("clinicLoginTime");try{if(db)await db.auth.signOut()}catch(e){console.error(e)}
  $("app").classList.add("hidden");$("loginBox").classList.remove("hidden");$("password").value="";$("password").type="password";$("togglePassword").textContent="👁️";
- $("loginMessage").textContent="";patients=[];appointments=[];paymentHistory=[];cancelEdit();cancelAppointmentEdit();isLoggingOut=false;
+ $("loginMessage").textContent="";patients=[];appointments=[];paymentHistory=[];currentUserId=null;currentUserRole=null;currentUserBranch=null;$("accountRoleInfo").textContent="";cancelEdit();cancelAppointmentEdit();isLoggingOut=false;
+}
+
+function isAdmin(){return currentUserRole==="admin"}
+function applyRolePermissions(){
+ const admin=isAdmin();
+ $("dashboardTitle").textContent=admin?"Admin Dashboard":"Branch Dashboard";
+ $("accountRoleInfo").textContent=admin?"Account: ADMIN — All branches access":"Account: BRANCH — "+currentUserBranch+" (own branch only)";
+ // A branch account can only register patients in its assigned branch.
+ const patientBranch=$("branch");if(!admin){setValue("branch",currentUserBranch);patientBranch.disabled=true;}else patientBranch.disabled=false;
+ // Appointment branch is derived from the selected patient's branch.
+ const appointmentBranch=$("appointment_branch");appointmentBranch.disabled=true;
+ if(!admin)setValue("appointment_branch",currentUserBranch);
+ // Branch users cannot switch the patient search filter to another branch.
+ const filter=$("branchFilter");if(!admin){setValue("branchFilter",currentUserBranch);filter.disabled=true;}else{filter.disabled=false;if(!filter.value)setValue("branchFilter","all")}
+ // Global clinic settings are shared and read-only for branch accounts.
+ document.querySelectorAll("#settingsSection .settings-item").forEach(item=>{
+  const account=item.querySelector("#currentPassword");
+  const isAccount=!!account;
+  item.querySelectorAll("input,select,textarea,button").forEach(el=>{
+   if(isAccount&&["currentPassword","newPassword","confirmPassword","changePasswordButton"].includes(el.id))return;
+   if(el.classList.contains("branch-export"))return;
+   if(!admin)el.disabled=true;else el.disabled=false;
+  });
+ });
+ $("saveSettingsButton").classList.toggle("hidden",!admin);
+ ["restoreFile","previewRestoreButton","restoreButton"].forEach(id=>$(id).classList.toggle("hidden",!admin));
+ const restoreHeading=$("restoreFile").parentElement.querySelector("h3");if(restoreHeading)restoreHeading.classList.toggle("hidden",!admin);
+ const restoreLabel=$("restoreFile").parentElement.querySelector("label");if(restoreLabel)restoreLabel.classList.toggle("hidden",!admin);
+ if(!admin){$("restorePreview").classList.add("hidden");$("settingsMessage").textContent="Branch accounts can change their own password and download their branch data. Global clinic settings and restore are Admin-only."}
+ else if($("settingsMessage").textContent.startsWith("Branch accounts"))$("settingsMessage").textContent="";
 }
 
 /* SETTINGS */
@@ -435,6 +474,7 @@ function fillSettingsForm(){
 }
 function readSettingsForm(){return {clinicName:value("settingClinicName")||"Ayoubi Dental Clinic",phone:value("settingClinicPhone"),address:value("settingClinicAddress"),logo:value("settingClinicLogo"),language:value("settingLanguage")||"en",currency:value("settingCurrency")||"AFN",theme:value("settingTheme")||"pink",timeout:Number(value("settingTimeout"))||60}}
 async function saveSettings(){
+ if(!isAdmin()){$("settingsMessage").textContent="Only Admin can change global clinic settings.";return}
  const settings=readSettingsForm();$("saveSettingsButton").disabled=true;$("settingsMessage").textContent="Saving settings...";
  try{const {error}=await db.from("clinic_settings").upsert({id:1,settings,updated_at:new Date().toISOString()},{onConflict:"id"});if(error)throw error;clinicSettings=settings;applySettings();fillSettingsForm();$("settingsMessage").textContent="Settings saved successfully.";if(logoutTimer)startSessionTimer()}
  catch(e){$("settingsMessage").textContent="Settings save error: "+e.message}
@@ -480,10 +520,11 @@ async function exportBackup(){
   const backup={application:"Ayoubi Dental Clinic",backupDate:new Date().toISOString(),patients:p.data||[],appointments:a.data||[],patient_payments:pay.data||[],clinic_settings:s.data||null,patient_treatments:t.data||[],patient_tooth_chart:c.data||[]};
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),link=document.createElement("a");
   link.href=url;link.download="Ayoubi-Clinic-Backup-"+localDate()+".json";document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
-  $("backupMessage").textContent="Backup downloaded successfully.";
+  $("backupMessage").textContent=isAdmin()?"Full clinic backup downloaded successfully.":"Your branch data backup downloaded successfully.";
  }catch(e){$("backupMessage").textContent="Backup error: "+e.message}
 }
 async function previewRestore(){
+ if(!isAdmin()){$("restoreMessage").textContent="Only Admin can restore clinic data.";return}
  const file=$("restoreFile").files[0];$("restorePreview").classList.add("hidden");$("restoreMessage").textContent="";selectedRestoreBackup=null;
  if(!file){$("restoreMessage").textContent="Please select a backup file.";return}
  if(file.size>50*1024*1024){$("restoreMessage").textContent="Backup file is too large (maximum 50 MB).";return}
@@ -502,6 +543,7 @@ async function previewRestore(){
  }catch(e){$("restoreMessage").textContent="Backup file error: "+e.message}
 }
 async function restoreBackup(){
+ if(!isAdmin()){$("restoreMessage").textContent="Only Admin can restore clinic data.";return}
  if(!selectedRestoreBackup){$("restoreMessage").textContent="Please preview a backup file first.";return}
  const b=selectedRestoreBackup;if(!confirm("Restore this backup now? Make a fresh backup before continuing."))return;
  const rb=$("restoreButton"),pb=$("previewRestoreButton");rb.disabled=true;pb.disabled=true;
@@ -595,7 +637,7 @@ function setupNewFeatureSearch(){
 }
 
 function renderPatients(){
- const q=value("search").toLowerCase(),branch=value("branchFilter"),body=$("patientRows");body.replaceChildren();
+ const q=value("search").toLowerCase(),branch=isAdmin()?value("branchFilter"):currentUserBranch,body=$("patientRows");body.replaceChildren();
  const list=patients.filter(p=>(String(p.full_name||"").toLowerCase().includes(q)||String(p.phone||"").toLowerCase().includes(q))&&(branch==="all"||normalizeBranch(p.branch)===branch));
  list.forEach(p=>{
   const tr=document.createElement("tr");[p.full_name,p.phone,p.age,normalizeBranch(p.branch)].forEach(v=>{const td=document.createElement("td");td.textContent=v??"";tr.appendChild(td)});
@@ -607,8 +649,8 @@ function renderPatients(){
  if(!list.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=5;td.textContent="No patients found.";tr.appendChild(td);body.appendChild(tr)}
 }
 const patientFields=["full_name","phone","age","doctor_name","gender","registration_date","chief_complaint","diagnosis","tooth_number","treatment","prescription","next_appointment","medical_history","address"];
-function editPatient(p){editingId=p.id;patientFields.forEach(k=>setValue(k,p[k]));setValue("branch",normalizeBranch(p.branch));$("patientFormTitle").textContent="Edit Patient";$("savePatientButton").textContent="Update Patient";$("cancelPatientButton").classList.remove("hidden");showSection("patientSection")}
-function cancelEdit(){editingId=null;patientFields.forEach(k=>setValue(k,""));setValue("branch","Main Branch");$("dentalFiles").value="";$("patientFormTitle").textContent="Register New Patient";$("savePatientButton").textContent="Save Patient";$("cancelPatientButton").classList.add("hidden")}
+function editPatient(p){if(!isAdmin()&&normalizeBranch(p.branch)!==currentUserBranch){alert("You can only edit patients from your own branch.");return}editingId=p.id;patientFields.forEach(k=>setValue(k,p[k]));setValue("branch",normalizeBranch(p.branch));$("patientFormTitle").textContent="Edit Patient";$("savePatientButton").textContent="Update Patient";$("cancelPatientButton").classList.remove("hidden");showSection("patientSection")}
+function cancelEdit(){editingId=null;patientFields.forEach(k=>setValue(k,""));setValue("branch",isAdmin()?"Main Branch":(currentUserBranch||"Main Branch"));$("dentalFiles").value="";$("patientFormTitle").textContent="Register New Patient";$("savePatientButton").textContent="Save Patient";$("cancelPatientButton").classList.add("hidden")}
 async function uploadImages(id,oldPaths=[]){
  const files=Array.from($("dentalFiles").files||[]);if(!files.length)return oldPaths;
  const {data,error:userError}=await db.auth.getUser();if(userError||!data.user)throw new Error("Please login again.");
@@ -620,7 +662,7 @@ async function uploadImages(id,oldPaths=[]){
 }
 async function savePatient(){
  const full_name=value("full_name");if(!full_name){alert("Please enter patient name.");return}
- const branch=value("branch");if(!BRANCHES.includes(branch)){alert("Select a valid branch.");return}
+ const branch=isAdmin()?value("branch"):currentUserBranch;if(!BRANCHES.includes(branch)){alert("Invalid branch assignment.");return}
  const record={full_name,phone:value("phone"),age:value("age")?Number(value("age")):null,doctor_name:value("doctor_name"),gender:value("gender"),branch,registration_date:value("registration_date")||localDate(),chief_complaint:value("chief_complaint"),diagnosis:value("diagnosis"),tooth_number:value("tooth_number"),treatment:value("treatment"),prescription:value("prescription"),next_appointment:value("next_appointment")||null,medical_history:value("medical_history"),address:value("address")};
  $("savePatientButton").disabled=true;
  try{
@@ -631,7 +673,7 @@ async function savePatient(){
   showMessage(editingId!==null?"Patient updated successfully.":"Patient saved successfully.");cancelEdit();await loadPatients();showSection("dashboardSection");
  }catch(e){showMessage("Save error: "+e.message);alert("Save error: "+e.message)}finally{$("savePatientButton").disabled=false}
 }
-async function deletePatient(id){if(!confirm("Are you sure you want to delete this patient?"))return;const {error}=await db.from("Patients").delete().eq("id",id);if(error){showMessage("Delete error: "+error.message);return}showMessage("Patient deleted.");await loadPatients();await loadAppointments()}
+async function deletePatient(id){const p=patients.find(x=>String(x.id)===String(id));if(!p||(!isAdmin()&&normalizeBranch(p.branch)!==currentUserBranch)){alert("You can only delete patients from your own branch.");return}if(!confirm("Are you sure you want to delete this patient?"))return;const {error}=await db.from("Patients").delete().eq("id",id);if(error){showMessage("Delete error: "+error.message);return}showMessage("Patient deleted.");await loadPatients();await loadAppointments()}
 function addDetail(parent,label,v){const p=document.createElement("p"),b=document.createElement("strong");b.textContent=label+": ";p.append(b,document.createTextNode(v==null?"":String(v)));parent.appendChild(p)}
 
 /* DETAILS */
@@ -668,16 +710,17 @@ function renderAppointments(){
  if(!list.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=8;td.textContent="No appointments found.";tr.appendChild(td);body.appendChild(tr)}
 }
 async function saveAppointment(){
- const patientId=value("appointment_patient"),date=value("appointment_date"),branch=value("appointment_branch");if(!patientId){appointmentMessage("Please select a patient.");return}if(!date){appointmentMessage("Please select appointment date.");return}if(!BRANCHES.includes(branch)){appointmentMessage("Please select a valid branch.");return}
+ const patientId=value("appointment_patient"),date=value("appointment_date"),patient=patientForAppointment(patientId);if(!patientId||!patient){appointmentMessage("Please select a valid patient.");return}if(!date){appointmentMessage("Please select appointment date.");return}if(!isAdmin()&&normalizeBranch(patient.branch)!==currentUserBranch){appointmentMessage("You can only create appointments for your own branch patients.");return}const branch=normalizeBranch(patient.branch);
  const record={patient_id:patientId,appointment_date:date,appointment_time:value("appointment_time")||null,branch,reason:value("appointment_reason"),status:value("appointment_status"),notes:value("appointment_notes")};$("saveAppointmentButton").disabled=true;
  try{if(editingAppointmentId!==null){const {error}=await db.from("appointments").update(record).eq("id",editingAppointmentId);if(error)throw error;appointmentMessage("Appointment updated successfully.")}
  else{const {error}=await db.from("appointments").insert([record]);if(error)throw error;appointmentMessage("Appointment saved successfully.")}
  cancelAppointmentEdit();await loadAppointments()}catch(e){appointmentMessage("Appointment error: "+e.message)}finally{$("saveAppointmentButton").disabled=false}
 }
-function editAppointment(a){editingAppointmentId=a.id;setValue("appointment_patient",a.patient_id);setValue("appointment_date",a.appointment_date);setValue("appointment_time",a.appointment_time);setValue("appointment_branch",normalizeBranch(a.branch));setValue("appointment_reason",a.reason);setValue("appointment_status",a.status);setValue("appointment_notes",a.notes);$("appointmentTitle").textContent="Edit Appointment";$("saveAppointmentButton").textContent="Update Appointment";$("cancelAppointmentButton").classList.remove("hidden")}
-function cancelAppointmentEdit(){editingAppointmentId=null;["appointment_patient","appointment_date","appointment_time","appointment_reason","appointment_notes"].forEach(id=>setValue(id,""));setValue("appointment_branch","Main Branch");setValue("appointment_status","Scheduled");$("appointmentTitle").textContent="Appointment Management";$("saveAppointmentButton").textContent="Save Appointment";$("cancelAppointmentButton").classList.add("hidden")}
+function editAppointment(a){const patient=patientForAppointment(a.patient_id);if(!patient){appointmentMessage("The linked patient is not available in your account.");return}if(!isAdmin()&&normalizeBranch(patient.branch)!==currentUserBranch){appointmentMessage("You can only edit appointments for your own branch patients.");return}editingAppointmentId=a.id;setValue("appointment_patient",a.patient_id);setValue("appointment_date",a.appointment_date);setValue("appointment_time",a.appointment_time);setValue("appointment_branch",normalizeBranch(patient.branch));setValue("appointment_reason",a.reason);setValue("appointment_status",a.status);setValue("appointment_notes",a.notes);$("appointmentTitle").textContent="Edit Appointment";$("saveAppointmentButton").textContent="Update Appointment";$("cancelAppointmentButton").classList.remove("hidden")}
+function cancelAppointmentEdit(){editingAppointmentId=null;["appointment_patient","appointment_date","appointment_time","appointment_reason","appointment_notes"].forEach(id=>setValue(id,""));setValue("appointment_branch",isAdmin()?"Main Branch":(currentUserBranch||"Main Branch"));setValue("appointment_status","Scheduled");$("appointmentTitle").textContent="Appointment Management";$("saveAppointmentButton").textContent="Save Appointment";$("cancelAppointmentButton").classList.add("hidden")}
 async function deleteAppointment(id){if(!confirm("Delete this appointment?"))return;const {error}=await db.from("appointments").delete().eq("id",id);if(error){appointmentMessage("Delete error: "+error.message);return}appointmentMessage("Appointment deleted.");await loadAppointments()}
 function clearAppointmentFilter(){$("appointmentFilterDate").value="";$("appointmentSearch").value="";$("appointmentStatusFilter").value="all";renderAppointments()}
+$("appointment_patient").addEventListener("change",()=>{const p=patientForAppointment(value("appointment_patient"));if(p)setValue("appointment_branch",normalizeBranch(p.branch));else setValue("appointment_branch",isAdmin()?"Main Branch":currentUserBranch)});
 
 /* PAYMENTS */
 async function loadPatientAccount(){
@@ -690,7 +733,7 @@ async function loadPatientAccount(){
  if(!paymentHistory.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="No payment history yet.";tr.appendChild(td);body.appendChild(tr)}
 }
 async function savePayment(){
- const id=value("payment_patient");if(!id){$("paymentMessage").textContent="Please select a patient.";return}
+ const id=value("payment_patient"),selectedPatient=patients.find(p=>String(p.id)===String(id));if(!selectedPatient||(!isAdmin()&&normalizeBranch(selectedPatient.branch)!==currentUserBranch)){$("paymentMessage").textContent="You can only record payments for your own branch patients.";return}if(!id){$("paymentMessage").textContent="Please select a patient.";return}
  const fee=Number(value("payment_total_fee")),amount=Number(value("payment_amount")||0),date=value("payment_date");if(!Number.isFinite(fee)||fee<0||!Number.isFinite(amount)||amount<0){$("paymentMessage").textContent="Enter valid amounts.";return}if(!date){$("paymentMessage").textContent="Select payment date.";return}
  const paid=paymentHistory.reduce((s,r)=>s+Number(r.amount_paid||0),0);if(amount>0&&paid+amount>fee){$("paymentMessage").textContent="Payment is greater than remaining balance.";return}
  $("savePaymentButton").disabled=true;$("paymentMessage").textContent="Saving...";
@@ -706,7 +749,7 @@ async function loadTreatmentHistory(){
  if(!data?.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=6;td.textContent="No treatment history found.";tr.appendChild(td);body.appendChild(tr)}
 }
 async function saveTreatment(){
- const id=value("treatmentPatient");if(!id){$("treatmentMessage").textContent="Please select a patient.";return}
+ const id=value("treatmentPatient"),selectedPatient=patients.find(p=>String(p.id)===String(id));if(!selectedPatient||(!isAdmin()&&normalizeBranch(selectedPatient.branch)!==currentUserBranch)){$("treatmentMessage").textContent="You can only record treatments for your own branch patients.";return}if(!id){$("treatmentMessage").textContent="Please select a patient.";return}
  const record={patient_id:String(id),treatment_date:value("treatmentDate")||localDate(),tooth_number:value("treatmentTooth"),diagnosis:value("treatmentDiagnosis"),treatment:value("treatmentDescription"),notes:value("treatmentNotes")};
  $("saveTreatmentButton").disabled=true;
  try{const {error}=await db.from("patient_treatments").insert([record]);if(error)throw error;["treatmentTooth","treatmentDiagnosis","treatmentDescription","treatmentNotes"].forEach(id=>setValue(id,""));await loadTreatmentHistory();$("treatmentMessage").textContent="Treatment saved successfully."}
@@ -777,7 +820,7 @@ function selectTooth(fdi){
  renderDentalChart();
 }
 async function saveToothRecord(){
- const patientId=value("chartPatient");if(!patientId){$("chartMessage").textContent="Please select a patient.";return}
+ const patientId=value("chartPatient"),selectedPatient=patients.find(p=>String(p.id)===String(patientId));if(!selectedPatient||(!isAdmin()&&normalizeBranch(selectedPatient.branch)!==currentUserBranch)){$("chartMessage").textContent="You can only edit charts for your own branch patients.";return}if(!patientId){$("chartMessage").textContent="Please select a patient.";return}
  if(!selectedToothFDI){$("chartMessage").textContent="Please select a tooth from the chart.";return}
  $("saveToothButton").disabled=true;$("chartMessage").textContent="Saving tooth record...";
  const record={patient_id:String(patientId),tooth_fdi:selectedToothFDI,tooth_status:value("chartStatus"),treatment:value("chartTreatment"),notes:value("chartNotes"),updated_at:new Date().toISOString()};
