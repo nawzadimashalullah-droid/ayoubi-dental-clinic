@@ -216,6 +216,7 @@ img.patient-image{max-width:180px;max-height:180px;object-fit:contain;border:2px
 <button class="back-button" onclick="showSection('dashboardSection')">← Back to Dashboard</button>
 <h2 data-i18n="settings">Settings</h2>
 <p>د کلینیک د ویبپاڼې تنظیمات</p>
+<div class="settings-item" id="settingsBranchChooser"><h3>Branch Settings / د څانګې تنظیمات</h3><label for="settingsBranchSelect">Select Branch</label><select id="settingsBranchSelect"><option value="1">Main Branch</option><option value="4">Second Representative Branch</option><option value="5">Third Representative Branch</option></select><p id="settingsBranchInfo" class="password-hint"></p></div>
 <div class="settings-grid">
 <div class="settings-item">
 <h3>1. Clinic Information</h3>
@@ -359,6 +360,7 @@ const BRANCHES=["Main Branch","Second Representative Branch","Third Representati
 let db=null,patients=[],appointments=[],paymentHistory=[],editingId=null,editingAppointmentId=null,logoutTimer=null,isLoggingOut=false;
 let currentUserId=null,currentUserRole=null,currentUserBranch=null;
 let clinicSettings={clinicName:"Ayoubi Dental Clinic",phone:"",address:"",logo:"",language:"en",currency:"AFN",theme:"pink",timeout:60};
+let settingsRows=[],selectedSettingsId=1;
 let selectedRestoreBackup=null,chartRecords=[],selectedToothFDI=null,lastFullHistory=null;
 
 const $=id=>document.getElementById(id);
@@ -444,29 +446,47 @@ function applyRolePermissions(){
  if(!admin)setValue("appointment_branch",currentUserBranch);
  // Branch users cannot switch the patient search filter to another branch.
  const filter=$("branchFilter");if(!admin){setValue("branchFilter",currentUserBranch);filter.disabled=true;}else{filter.disabled=false;if(!filter.value)setValue("branchFilter","all")}
- // Global clinic settings are shared and read-only for branch accounts.
+ // Each branch can edit its own clinic settings; Admin can choose any branch.
+ const chooser=$("settingsBranchChooser"),selector=$("settingsBranchSelect");
+ chooser.classList.toggle("hidden",!admin);
+ if(admin){selector.disabled=false;selector.value=String(selectedSettingsId)}
+ else {selectedSettingsId=settingsIdForBranch(currentUserBranch);selector.value=String(selectedSettingsId);selector.disabled=true;$ ("settingsBranchInfo").textContent="تاسو یوازې د خپلې څانګې تنظیمات بدلولی شئ."}
  document.querySelectorAll("#settingsSection .settings-item").forEach(item=>{
-  const account=item.querySelector("#currentPassword");
-  const isAccount=!!account;
+  const isAccount=!!item.querySelector("#currentPassword");
   item.querySelectorAll("input,select,textarea,button").forEach(el=>{
    if(isAccount&&["currentPassword","newPassword","confirmPassword","changePasswordButton"].includes(el.id))return;
    if(el.classList.contains("branch-export"))return;
-   if(!admin)el.disabled=true;else el.disabled=false;
+   if(el.id==="restoreFile"||el.id==="previewRestoreButton"||el.id==="restoreButton"){el.disabled=!admin;return}
+   el.disabled=false;
   });
  });
- $("saveSettingsButton").classList.toggle("hidden",!admin);
+ $("saveSettingsButton").classList.remove("hidden");
  ["restoreFile","previewRestoreButton","restoreButton"].forEach(id=>$(id).classList.toggle("hidden",!admin));
  const restoreHeading=$("restoreFile").parentElement.querySelector("h3");if(restoreHeading)restoreHeading.classList.toggle("hidden",!admin);
  const restoreLabel=$("restoreFile").parentElement.querySelector("label");if(restoreLabel)restoreLabel.classList.toggle("hidden",!admin);
- if(!admin){$("restorePreview").classList.add("hidden");$("settingsMessage").textContent="Branch accounts can change their own password and download their branch data. Global clinic settings and restore are Admin-only."}
- else if($("settingsMessage").textContent.startsWith("Branch accounts"))$("settingsMessage").textContent="";
+ if(!admin){$("restorePreview").classList.add("hidden");$("settingsMessage").textContent="تاسو د خپلې څانګې تنظیمات بدلولی شئ؛ Restore یوازې Admin کولای شي."}
+ else if($("settingsMessage").textContent.startsWith("تاسو د خپلې څانګې"))$("settingsMessage").textContent="";
 }
 
 /* SETTINGS */
+function settingsIdForBranch(branch){return branch==="Main Branch"?1:branch==="Second Representative Branch"?4:5}
 async function loadSettings(){
- if(!db)return;try{const {data,error}=await db.from("clinic_settings").select("settings").eq("id",1).maybeSingle();if(error)throw error;if(data?.settings)clinicSettings={...clinicSettings,...data.settings};applySettings()}
- catch(e){console.error("Settings loading error:",e.message)}
+ if(!db)return;
+ try{
+  const {data,error}=await db.from("clinic_settings").select("id,branch,settings");if(error)throw error;
+  settingsRows=data||[];
+  selectedSettingsId=isAdmin()?1:settingsIdForBranch(currentUserBranch);
+  if(!settingsRows.some(r=>Number(r.id)===Number(selectedSettingsId)))throw new Error("Settings row for this branch was not found.");
+  if(isAdmin())$("settingsBranchSelect").value=String(selectedSettingsId);
+  loadSelectedSettings();
+ }catch(e){console.error("Settings loading error:",e.message);$("settingsMessage").textContent="Settings loading error: "+e.message}
 }
+function loadSelectedSettings(){
+ const row=settingsRows.find(r=>Number(r.id)===Number(selectedSettingsId));
+ if(!row?.settings)return;
+ clinicSettings={...clinicSettings,...row.settings};fillSettingsForm();applySettings();
+}
+$("settingsBranchSelect").addEventListener("change",()=>{if(!isAdmin())return;selectedSettingsId=Number(value("settingsBranchSelect"));loadSelectedSettings();$("settingsMessage").textContent=""});
 function fillSettingsForm(){
  setValue("settingClinicName",clinicSettings.clinicName);setValue("settingClinicPhone",clinicSettings.phone);setValue("settingClinicAddress",clinicSettings.address);
  setValue("settingClinicLogo",clinicSettings.logo);setValue("settingLanguage",clinicSettings.language);setValue("settingCurrency",clinicSettings.currency);
@@ -474,10 +494,14 @@ function fillSettingsForm(){
 }
 function readSettingsForm(){return {clinicName:value("settingClinicName")||"Ayoubi Dental Clinic",phone:value("settingClinicPhone"),address:value("settingClinicAddress"),logo:value("settingClinicLogo"),language:value("settingLanguage")||"en",currency:value("settingCurrency")||"AFN",theme:value("settingTheme")||"pink",timeout:Number(value("settingTimeout"))||60}}
 async function saveSettings(){
- if(!isAdmin()){$("settingsMessage").textContent="Only Admin can change global clinic settings.";return}
+ if(!db)return;
+ const targetId=isAdmin()?Number(selectedSettingsId):settingsIdForBranch(currentUserBranch);
  const settings=readSettingsForm();$("saveSettingsButton").disabled=true;$("settingsMessage").textContent="Saving settings...";
- try{const {error}=await db.from("clinic_settings").upsert({id:1,settings,updated_at:new Date().toISOString()},{onConflict:"id"});if(error)throw error;clinicSettings=settings;applySettings();fillSettingsForm();$("settingsMessage").textContent="Settings saved successfully.";if(logoutTimer)startSessionTimer()}
- catch(e){$("settingsMessage").textContent="Settings save error: "+e.message}
+ try{
+  const row=settingsRows.find(r=>Number(r.id)===targetId);if(!row)throw new Error("Selected branch settings row was not found.");
+  const {error}=await db.from("clinic_settings").update({settings,updated_at:new Date().toISOString()}).eq("id",targetId);if(error)throw error;
+  row.settings=settings;clinicSettings=settings;applySettings();fillSettingsForm();$("settingsMessage").textContent="Settings saved successfully for "+(row.branch||currentUserBranch)+".";if(logoutTimer)startSessionTimer();
+ }catch(e){$("settingsMessage").textContent="Settings save error: "+e.message}
  finally{$("saveSettingsButton").disabled=false}
 }
 function applySettings(){
@@ -514,10 +538,10 @@ async function exportBackup(){
  try{
   const [p,a,pay,s,t,c]=await Promise.all([
    db.from("Patients").select("*"),db.from("appointments").select("*"),db.from("patient_payments").select("*"),
-   db.from("clinic_settings").select("*").eq("id",1).maybeSingle(),db.from("patient_treatments").select("*"),db.from("patient_tooth_chart").select("*")
+   db.from("clinic_settings").select("*"),db.from("patient_treatments").select("*"),db.from("patient_tooth_chart").select("*")
   ]);
   for(const r of [p,a,pay,s,t,c])if(r.error)throw r.error;
-  const backup={application:"Ayoubi Dental Clinic",backupDate:new Date().toISOString(),patients:p.data||[],appointments:a.data||[],patient_payments:pay.data||[],clinic_settings:s.data||null,patient_treatments:t.data||[],patient_tooth_chart:c.data||[]};
+  const backup={application:"Ayoubi Dental Clinic",backupDate:new Date().toISOString(),patients:p.data||[],appointments:a.data||[],patient_payments:pay.data||[],clinic_settings:s.data||[],patient_treatments:t.data||[],patient_tooth_chart:c.data||[]};
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),link=document.createElement("a");
   link.href=url;link.download="Ayoubi-Clinic-Backup-"+localDate()+".json";document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   $("backupMessage").textContent=isAdmin()?"Full clinic backup downloaded successfully.":"Your branch data backup downloaded successfully.";
@@ -537,7 +561,8 @@ async function previewRestore(){
   for(const [key,label] of [["appointments","appointment"],["patient_payments","payment"],["patient_treatments","treatment"],["patient_tooth_chart","tooth chart"]]){
    for(const r of b[key]||[]){if(r.patient_id===undefined||r.patient_id===null||!ids.has(String(r.patient_id)))throw new Error("A "+label+" has an invalid patient ID.");if(key!=="patient_tooth_chart"&&(r.id===undefined||r.id===null))throw new Error("A "+label+" has no ID.");if(key==="patient_tooth_chart"&&!r.tooth_fdi)throw new Error("A tooth chart record has no FDI tooth number.")}
   }
-  if(b.clinic_settings&&(!b.clinic_settings.id||b.clinic_settings.id!==1))throw new Error("Clinic settings data is invalid.");
+  const settingsBackup=Array.isArray(b.clinic_settings)?b.clinic_settings:(b.clinic_settings?[b.clinic_settings]:[]);
+  for(const r of settingsBackup)if(![1,4,5].includes(Number(r.id))||!r.settings||typeof r.settings!=="object")throw new Error("Clinic settings data is invalid.");
   selectedRestoreBackup=b;$("restorePreviewText").textContent="Backup Date: "+(b.backupDate||"Unknown")+" | Patients: "+b.patients.length+" | Appointments: "+b.appointments.length+" | Payments: "+b.patient_payments.length+" | Treatments: "+(b.patient_treatments||[]).length+" | Tooth records: "+(b.patient_tooth_chart||[]).length;
   $("restorePreview").classList.remove("hidden");$("restoreMessage").textContent="Backup file is valid. Review before restoring.";
  }catch(e){$("restoreMessage").textContent="Backup file error: "+e.message}
@@ -554,7 +579,8 @@ async function restoreBackup(){
   $("restoreMessage").textContent="Restoring payments...";await put("patient_payments",b.patient_payments);
   $("restoreMessage").textContent="Restoring treatments...";await put("patient_treatments",b.patient_treatments||[]);
   $("restoreMessage").textContent="Restoring dental chart...";await put("patient_tooth_chart",b.patient_tooth_chart||[],"patient_id,tooth_fdi");
-  if(b.clinic_settings){const {error}=await db.from("clinic_settings").upsert(b.clinic_settings,{onConflict:"id"});if(error)throw error}
+  const settingsBackup=Array.isArray(b.clinic_settings)?b.clinic_settings:(b.clinic_settings?[b.clinic_settings]:[]);
+  if(settingsBackup.length){const {error}=await db.from("clinic_settings").upsert(settingsBackup,{onConflict:"id"});if(error)throw error}
   await loadSettings();await loadPatients();await loadAppointments();$("restoreMessage").textContent="Backup records restored successfully. Check your records.";
   $("restorePreview").classList.add("hidden");$("restoreFile").value="";selectedRestoreBackup=null;
  }catch(e){$("restoreMessage").textContent="Restore error: "+e.message+" Some records may already have been restored."}
