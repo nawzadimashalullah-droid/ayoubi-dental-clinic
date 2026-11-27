@@ -570,20 +570,23 @@ async function previewRestore(){
 async function restoreBackup(){
  if(!isAdmin()){$("restoreMessage").textContent="Only Admin can restore clinic data.";return}
  if(!selectedRestoreBackup){$("restoreMessage").textContent="Please preview a backup file first.";return}
- const b=selectedRestoreBackup;if(!confirm("Restore this backup now? Make a fresh backup before continuing."))return;
+ if(!confirm("Restore this backup now? The secure server will add missing records and preserve existing records."))return;
  const rb=$("restoreButton"),pb=$("previewRestoreButton");rb.disabled=true;pb.disabled=true;
+ $("restoreMessage").textContent="Sending backup to the secure Admin-only restore service...";
  try{
-  async function put(table,records,conflict="id"){if(!records?.length)return;const {error}=await db.from(table).upsert(records,{onConflict:conflict});if(error)throw new Error(table+": "+error.message)}
-  $("restoreMessage").textContent="Restoring patients...";await put("Patients",b.patients.map(p=>({...p,branch:normalizeBranch(p.branch)})));
-  $("restoreMessage").textContent="Restoring appointments...";await put("appointments",b.appointments.map(a=>({...a,branch:normalizeBranch(a.branch)})));
-  $("restoreMessage").textContent="Restoring payments...";await put("patient_payments",b.patient_payments);
-  $("restoreMessage").textContent="Restoring treatments...";await put("patient_treatments",b.patient_treatments||[]);
-  $("restoreMessage").textContent="Restoring dental chart...";await put("patient_tooth_chart",b.patient_tooth_chart||[],"patient_id,tooth_fdi");
-  const settingsBackup=Array.isArray(b.clinic_settings)?b.clinic_settings:(b.clinic_settings?[b.clinic_settings]:[]);
-  if(settingsBackup.length){const {error}=await db.from("clinic_settings").upsert(settingsBackup,{onConflict:"id"});if(error)throw error}
-  await loadSettings();await loadPatients();await loadAppointments();$("restoreMessage").textContent="Backup records restored successfully. Check your records.";
+  // Supabase invoke sends the signed-in user's access token. The Edge Function
+  // must independently verify that token and confirm role=admin, branch=null.
+  const {data,error}=await db.functions.invoke("restore-clinic-backup",{
+   body:{backup:selectedRestoreBackup}
+  });
+  if(error)throw new Error(error.message||"The restore service returned an error.");
+  if(data&&data.success===false)throw new Error(data.message||"The restore service rejected the backup.");
+  await loadSettings();await loadPatients();await loadAppointments();
+  $("restoreMessage").textContent=(data&&data.message)||"Restore completed by the secure server. Missing records were added; existing records were preserved.";
   $("restorePreview").classList.add("hidden");$("restoreFile").value="";selectedRestoreBackup=null;
- }catch(e){$("restoreMessage").textContent="Restore error: "+e.message+" Some records may already have been restored."}
+ }catch(e){
+  $("restoreMessage").textContent="Restore error: "+e.message+" No success was confirmed. Check the Edge Function logs before trying again.";
+ }
  finally{rb.disabled=false;pb.disabled=false}
 }
 
@@ -797,15 +800,16 @@ const primaryFDI=["55","54","53","52","51","61","62","63","64","65","75","74","7
 function fdiInfo(fdi){const n=Number(fdi),q=Math.floor(n/10),pos=n%10;return {q,pos,primary:q>=5}}
 function universalNumber(fdi){
  const {q,pos,primary}=fdiInfo(fdi);
- if(!primary){const map={1:9-pos,2:8+pos,3:16+pos,4:25-pos};return map[q]}
- const map={5:String.fromCharCode(64+pos),6:String.fromCharCode(69+pos),7:String.fromCharCode(80-pos),8:String.fromCharCode(75-pos)};
+ if(!primary){const map={1:9-pos,2:8+pos,3:16+pos,4:24+pos};return map[q]}
+ // Universal primary teeth: A-E, F-J, K-O, P-T by quadrant.
+ const map={5:String.fromCharCode(70-pos),6:String.fromCharCode(69+pos),7:String.fromCharCode(80-pos),8:String.fromCharCode(79+pos)};
  return map[q];
 }
 function displayTooth(fdi,system){
  if(system==="FDI")return fdi;
  const {q,pos}=fdiInfo(fdi);
  if(system==="Universal")return universalNumber(fdi);
- const symbol={1:"┘",2:"└",3:"┐",4:"┌",5:"┘",6:"└",7:"┐",8:"┌"}[q];
+ const symbol={1:"┘",2:"└",3:"┌",4:"┐",5:"┘",6:"└",7:"┌",8:"┐"}[q];
  const tooth= q>=5?String.fromCharCode(64+pos):String(pos);
  return tooth+symbol;
 }
@@ -828,7 +832,11 @@ function renderDentalChart(){
  const groups={permanentUpper:permanentFDI.slice(0,16),permanentLower:permanentFDI.slice(16),primaryUpper:primaryFDI.slice(0,10),primaryLower:primaryFDI.slice(10)};
  Object.entries(groups).forEach(([id,teeth])=>{const box=$(id);box.replaceChildren();teeth.forEach(fdi=>box.appendChild(makeToothButton(fdi,fdiInfo(fdi).primary)))});
  renderChartRows();
- if(selectedToothFDI){const r=chartRecords.find(x=>String(x.tooth_fdi)===selectedToothFDI);if(r){setValue("chartStatus",r.tooth_status||"Healthy");setValue("chartTreatment",r.treatment||"");setValue("chartNotes",r.notes||"")}}
+ if(selectedToothFDI){
+  $("selectedToothTitle").textContent="Selected Tooth: "+displayTooth(selectedToothFDI,value("chartSystem"))+" (FDI "+selectedToothFDI+")";
+  const r=chartRecords.find(x=>String(x.tooth_fdi)===selectedToothFDI);
+  if(r){setValue("chartStatus",r.tooth_status||"Healthy");setValue("chartTreatment",r.treatment||"");setValue("chartNotes",r.notes||"")}
+ }
 }
 async function loadDentalChart(){
  const id=value("chartPatient");chartRecords=[];selectedToothFDI=null;setValue("chartStatus","Healthy");setValue("chartTreatment","");setValue("chartNotes","");
